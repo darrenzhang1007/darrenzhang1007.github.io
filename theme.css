@@ -87,3 +87,5 @@
 :root[data-theme="dark"] .theme-panel button[aria-pressed="true"]{color:#a1e2bf;background:#2b4536}
 @media(max-width:760px){.header-actions{gap:8px}.theme-toggle{width:32px;height:34px;padding:6px}.header-inner{gap:16px}.header-inner nav{gap:16px}.header-actions .search-trigger{width:30px}.theme-panel{right:0}}
 @media(max-width:400px){.header-inner{padding:0 15px;gap:12px}.header-inner nav{gap:12px}.header-actions{gap:5px}}
+
+:root[data-theme="dark"] .book-hero{filter:brightness(.78) saturate(.8)}
