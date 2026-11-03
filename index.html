@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="theme.css?v=256cddc575d0">
   <script defer src="vendor--katex.min.js"></script>
   <script defer src="vendor--auto-render.min.js"></script>
-  <script type="module" src="app.js?v=22925abb7623"></script>
+  <script type="module" src="app.js?v=ecd38853957f"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
@@ -45,7 +45,7 @@
   </header>
   <main id="main" tabindex="-1"></main>
   <footer class="site-footer"><span>© 2026 DarrenZhang · 博观而约取，厚积而薄发。</span><div><a href="#thoughts">阅读收藏</a><a href="#home">返回主页</a></div></footer>
-  <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-heading"><h2 id="search-title">搜索全部知识库</h2><button class="icon-button" id="close-search" aria-label="关闭搜索">×</button></div><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="search-input" type="search" placeholder="搜索标题、关键词或正文…" autocomplete="off"></label><p class="search-hint">搜索已收录文章的标题、简介与正文</p><div id="search-results" aria-live="polite"></div><div class="search-footer"><span>↑ ↓ 选择 · Enter 阅读</span><span>Esc 关闭</span></div></dialog>
+  <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-heading"><h2 id="search-title">搜索全部知识库</h2><button class="icon-button" id="close-search" aria-label="关闭搜索">×</button></div><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" maxlength="200" placeholder="搜索标题、关键词或正文…" autocomplete="off"></label><p id="search-summary" class="search-hint" role="status" aria-live="polite">搜索标题、章节与正文</p><div id="search-results" role="listbox" aria-label="搜索结果"></div><div class="search-footer"><span>↑ ↓ 选择 · Enter 阅读</span><span>Esc 关闭</span></div></dialog>
   <dialog id="image-preview" class="image-preview" aria-labelledby="image-title"><header class="image-preview-header"><h2 id="image-title">架构图预览</h2><div class="image-controls"><button id="image-zoom-out" aria-label="缩小图片">−</button><span id="image-scale" aria-live="polite">100%</span><button id="image-zoom-in" aria-label="放大图片">＋</button><button id="image-fit">适应窗口</button><a id="image-original" target="_blank" rel="noopener">打开原图 ↗</a><button id="image-close" aria-label="关闭图片预览">×</button></div></header><div id="image-stage" class="image-stage"><img id="image-large" alt="" draggable="false"></div><footer class="image-preview-footer">滚轮缩放 · 拖动平移 · Esc 关闭 <span>＋ / − 缩放，0 适应窗口</span></footer></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 </body>
