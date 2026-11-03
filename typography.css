@@ -1,0 +1,34 @@
+/* Shared reading type: the same local font serves Chinese and Latin text. */
+:root{--sans:"Darren Sans SC","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;--ink:#252b32;--muted:#68727d}
+body{font-weight:400;text-size-adjust:100%;-webkit-text-size-adjust:100%}
+button,input{font-family:var(--sans)}
+.brand,.profile h1,.page-heading h1,.book-overview h1,.book-card h3,.article-head h1,.section-heading h2,.sidebar-book strong{font-weight:600;letter-spacing:normal}
+.activity-title{font-size:14px;font-weight:400;color:#303841}
+.activity-book,.activity-action,.activity-row time{font-size:12px;color:#6c7780}
+.profile-motto{color:#505b65}.profile-role{color:#6c7780}
+.tree-note{font-size:13px;line-height:1.75;color:#58636e}
+.book-sidebar summary,.sidebar-overview{font-size:13px;color:#53606b}
+.tree-note.current{font-weight:500}
+.sidebar-search{font-size:12px;color:#707c86}
+.sidebar-back,.sidebar-section-label{font-size:12px;color:#737e88}
+.sidebar-bottom{font-size:11px;color:#7f8991}
+.contents-group h3{font-size:14px;color:#505e69}
+.contents-note{color:#404b55}.contents-note small{font-size:12px;color:#7a848d}
+.breadcrumbs,.article-actions,.article-actions button,.article-description,.document-meta{font-size:12px;color:#6b7782}
+.article-description{font-size:14px;line-height:1.8}
+.article-head h1{line-height:1.5;color:#242b33}
+.prose{font-family:var(--sans);font-size:16px;line-height:1.9;letter-spacing:normal;color:#303841}
+.prose :is(h1,h2,h3,h4,h5,h6){font-weight:600;letter-spacing:normal;color:#242d36;line-height:1.6}
+.prose strong{font-weight:600;color:#28323b}
+.prose blockquote{font-size:15px;line-height:1.9;color:#55616c;background:#f7f9f8;border-left-color:#cfdbd4}
+.prose code{font-family:"Cascadia Code",Consolas,"SFMono-Regular",ui-monospace,monospace;font-size:.9em;line-height:inherit;color:#405564;background:#f0f3f5}
+.prose pre{font-size:13px;line-height:1.75;color:#364351;background:#f6f8fa}
+.prose pre code{font-size:1em;color:inherit;background:transparent}
+.prose table{font-size:14px;line-height:1.8;color:#3d4853}
+.prose th{font-weight:600}.prose summary{font-size:14px;color:#586b60}
+.outline-title h2{font-size:13px;color:#66727c}
+.outline-tree a.toc-link{font-size:13px;color:#63717d;line-height:1.75}
+.outline-tree a.toc-link.level-3{font-size:12px}
+.outline-tree a.toc-link.current{font-weight:500;color:#087a52}
+.article-pagination a{font-size:13px;color:#4f6b5b}.article-pagination small,.article-source{font-size:12px;color:#78837b}
+@media(max-width:760px){.prose{font-size:16px;line-height:1.9}.prose blockquote{font-size:15px}.prose table{font-size:13px}.prose pre{font-size:12px}.article-description{font-size:13px}.activity-title{font-size:14px}.activity-book,.activity-action,.activity-row time{font-size:11px}.reader-toolbar,.reader-toolbar button{font-size:12px}.document-meta{font-size:11px}.profile-role{font-size:12px}.profile-motto{font-size:13px}}
