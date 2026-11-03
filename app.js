@@ -1,4 +1,4 @@
-const directoryStyle=document.createElement('link');directoryStyle.rel='stylesheet';directoryStyle.href='directory.css?v=1';document.head.appendChild(directoryStyle);
+const directoryStyle=document.createElement('link');directoryStyle.rel='stylesheet';directoryStyle.href='directory.css?v=968b0d542759';document.head.appendChild(directoryStyle);
 const main=document.querySelector('main'),dialog=document.querySelector('#search-dialog'),input=document.querySelector('#search-input'),results=document.querySelector('#search-results');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons={book:'<path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',arrow:'<path d="M5 12h14m-5-5 5 5-5 5"/>',file:'<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/>',home:'<path d="m3 10 9-7 9 7m-16-2v13h14V8M9 21v-8h6v8"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',link:'<path d="m9 15 6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2M7 11l-2 2a5 5 0 0 0 7 7l2-2"/>'};
