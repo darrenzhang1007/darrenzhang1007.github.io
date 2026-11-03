@@ -1,0 +1,176 @@
+digraph DSV41Flash {
+  graph [
+    rankdir=TB,
+    bgcolor="#fafafa",
+    pad=0.15,
+    nodesep=0.28,
+    ranksep=0.42,
+    newrank=true,
+    compound=true,
+    fontname="Helvetica",
+    fontsize=18,
+    labelloc=t,
+    label="DeepSeek-V4.1-Flash - Model Architecture\nhidden=5120 | hc_mult=4 x 5120 | 40 layers | 384 experts x top-6 + 1 shared | MLA 64 x 512 + Indexer 32 x 128 | W4A8 routed / W8A8 attn + shared"
+  ];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, color="#6b7280", fillcolor="#ffffff", margin="0.10,0.06"];
+  edge [fontname="Helvetica", fontsize=9, color="#6b7280", fontcolor="#374151", arrowsize=0.7];
+
+  subgraph cluster_input {
+    label="1. Input and Embedding"; style="rounded,filled"; fillcolor="#eff6ff"; color="#3b82f6"; fontcolor="#1e3a8a"; fontsize=13;
+    I_tok   [label="Token IDs\n[T] (flattened)", fillcolor="#dbeafe"];
+    I_embed [label="embed_tokens\n[129280 x 5120]\n-> hidden [T, 5120] BF16", fillcolor="#dbeafe"];
+    I_hcb   [label="layer 0: broadcast\nto hc=4 streams\nresidual [T, 4, 5120]\n(+ hc_attn_fn_broadcast)", fillcolor="#d1fae5"];
+    I_tok -> I_embed -> I_hcb;
+  }
+
+  subgraph cluster_stack {
+    label="2. 40 x DecoderLayer (layers.0..39; Engram at layers.1 and 14)"; style="rounded,filled"; fillcolor="#f9fafb"; color="#6b7280"; fontcolor="#374151"; fontsize=13;
+    L_x40 [label="layers.0..39\nL0-L1: SWA only\nL2-L19: SWA + ratio-2\nL20-L39: SWA + ratio-1", fillcolor="#e5e7eb"];
+    L_src [label="kv-source: L2 / 8 / 14 / 20\nindex-source: + L24 / 28 / 32 / 36\nL20 publishes 2048 candidate blocks", fillcolor="#e5e7eb"];
+
+    subgraph cluster_layer {
+      label="Single DecoderLayer topology (x40)"; style="rounded,filled"; fillcolor="#ffffff"; color="#9ca3af"; fontcolor="#374151"; fontsize=12;
+      L_eng   [label="layers.1 / 14 only:\nmhc_post -> Engram inject\n(detail 5)", fillcolor="#fef9c3", style="rounded,filled,dashed"];
+      L_mhc1  [label="mHC-pre (attn seam)\n[T, 20480] x hc_attn_fn[24, 20480]^T\nsinkhorn x 20\n-> x [T, 5120], attn_pre [T, 4]", fillcolor="#d1fae5"];
+      L_anorm [label="attn_norm\nRMSNorm [5120]", fillcolor="#e5e7eb"];
+      L_mla   [label="MLA + Indexer\n+ Compressor\n(detail 3)", fillcolor="#fed7aa", shape=hexagon, style="filled"];
+      L_mhc2  [label="mHC-pre (ffn seam)\npre_mix = attn_pre\nfinishes attention post\n-> x [T, 5120], ffn_pre [T, 4]", fillcolor="#d1fae5"];
+      L_fnorm [label="ffn_norm\nRMSNorm [5120]", fillcolor="#e5e7eb"];
+      L_moe   [label="MoE\n384 x top-6 + shared\n(detail 4)", fillcolor="#fecaca", shape=hexagon, style="filled"];
+      L_ret   [label="return (x, residual,\npost_mix, res_mix, ffn_pre)\npost deferred to next layer", fillcolor="#d1fae5"];
+      L_eng -> L_mhc1 [style=dashed];
+      L_mhc1 -> L_anorm -> L_mla -> L_mhc2 -> L_fnorm -> L_moe -> L_ret;
+      L_ret -> L_mhc1 [label="next layer", style=dashed, constraint=false, color="#16a34a", fontcolor="#166534"];
+    }
+  }
+
+  subgraph cluster_mla {
+    label="3. MLA + Indexer (q_lora=1280, head_dim=512 = 448 NoPE + 64 RoPE, SWA=128, topk=512)"; style="rounded,filled"; fillcolor="#fff7ed"; color="#ea580c"; fontcolor="#9a3412"; fontsize=13;
+
+    subgraph cluster_qp {
+      label="Main Q / SWA path (all layers)"; style="rounded,filled"; fillcolor="#ffffff"; color="#fb923c"; fontcolor="#9a3412"; fontsize=11;
+      Q_fused [label="fused_wqa_wkv (W8A8)\n[5120 to 1792]\n= qr 1280 + kv 512", fillcolor="#fed7aa"];
+      Q_norm  [label="fused_q_kv_rms_norm_quant\nqr / kv RMSNorm\n+ qr int8 for wq_b", fillcolor="#fed7aa"];
+      Q_wqb   [label="wq_b (W8A8)\n[1280 to 64 x 512]", fillcolor="#fed7aa"];
+      Q_rope  [label="qnorm_rope_kv_bf16_cache_insert\nQ: per-head norm + RoPE\nKV: RoPE + slot_mapping write", fillcolor="#fed7aa"];
+      K_swa   [label="SWA cache (BF16 dense)\n[pages, block_size, 512]\nwindow = 128", fillcolor="#fde68a"];
+      Q_fused -> Q_norm -> Q_wqb -> Q_rope;
+      Q_norm -> Q_rope [label="kv"];
+      Q_rope -> K_swa;
+    }
+
+    subgraph cluster_kvp {
+      label="Compressor (kv-source only: L2 / 8 / 14 / 20)"; style="rounded,filled"; fillcolor="#fdf2f8"; color="#db2777"; fontcolor="#9d174d"; fontsize=11;
+      C_score [label="kv_score: fused_wkv_wgate (BF16)\nratio-2: [5120 to 2 x 512]\nratio-1: [5120 to 512]", fillcolor="#fbcfe8"];
+      C_comp  [label="fused_save_compress_norm\npool by ratio + RMSNorm\n-> latent [T, 512]", fillcolor="#fbcfe8"];
+      C_cache [label="insert_cache (64-d RoPE)\ncompressed KV cache\nBF16, 512 per record", fillcolor="#fbcfe8"];
+      C_score -> C_comp -> C_cache;
+    }
+
+    subgraph cluster_idx {
+      label="Indexer (index-source only: L2 / 8 / 14 / 20 / 24 / 28 / 32 / 36)"; style="rounded,filled"; fillcolor="#ecfeff"; color="#0891b2"; fontcolor="#155e75"; fontsize=11;
+      I_w    [label="weights_proj (BF16)\n[5120 to 32]", fillcolor="#cffafe"];
+      I_q    [label="indexer.wq_b\n[1280 to 32 x 128]\n+ RoPE + FP8", fillcolor="#cffafe"];
+      I_k    [label="wk [512 to 128]\nk_norm + RoPE + FP8\nIndexer K cache 132 B / pos", fillcolor="#cffafe"];
+      I_log  [label="fp8_paged_mqa_logits\nper-head dot -> ReLU\n-> weighted sum", fillcolor="#cffafe"];
+      I_cand [label="two-level candidates\nL20: 2048 blocks x 8 pos\nL24 / 28 / 32 / 36: masked", fillcolor="#cffafe"];
+      I_top  [label="cooperative_topk\n-> topk_indices_buffer\n[*, 512] int32", fillcolor="#cffafe"];
+      I_q -> I_log; I_k -> I_log; I_w -> I_log;
+      I_log -> I_cand -> I_top;
+    }
+
+    subgraph cluster_core {
+      label="Sparse MLA + O projection"; style="rounded,filled"; fillcolor="#ffffff"; color="#7c3aed"; fontcolor="#5b21b6"; fontsize=11;
+      A_flash [label="dsv4_flash_mla_with_kv_cache (decode)\nflash_mla_sparse (prefill)\nQ x (SWA 128 + compressed top-512)\nattn_sink [64] FP32 = kernel input", fillcolor="#e9d5ff"];
+      A_o     [label="o [T, 64, 512]", fillcolor="#e9d5ff"];
+      O_inv   [label="fused_inv_rope_int8_quant", fillcolor="#fed7aa"];
+      O_woa   [label="wo_a: 8 groups\n[4096 to 1024]\n(o_lora_rank)", fillcolor="#fed7aa"];
+      O_wob   [label="wo_b\n[8 x 1024 to 5120]\nTP must divide 8", fillcolor="#fed7aa"];
+      A_flash -> A_o -> O_inv -> O_woa -> O_wob;
+    }
+
+    Q_norm -> I_q [label="normalized qr"];
+    C_comp -> I_k [label="latent"];
+    Q_rope -> A_flash [label="Q"];
+    K_swa -> A_flash;
+    C_cache -> A_flash;
+    I_top -> A_flash [label="top-512"];
+  }
+
+  subgraph cluster_moe {
+    label="4. MoE (384 routed x top-6 + 1 shared) (routed = W4A8 packed, shared = W8A8)"; style="rounded,filled"; fillcolor="#fef2f2"; color="#dc2626"; fontcolor="#991b1b"; fontsize=13;
+
+    subgraph cluster_gate {
+      label="Gate (router, full precision)"; style="rounded,filled"; fillcolor="#ffffff"; color="#f87171"; fontcolor="#991b1b"; fontsize=11;
+      G_lin  [label="Linear(h)\n[5120 to 384]\nFP32 router logits", fillcolor="#fecaca"];
+      G_topk [label="topk_softplus_sqrt\nsqrtsoftplus + bias (noaux_tc)\n-> ids / weights [T, 6]", fillcolor="#fecaca"];
+      G_rsf  [label="x routed_scaling_factor = 1.5\n(applied once, in weights)", fillcolor="#fecaca"];
+      G_vl   [label="input_ids\n-> bias_vl (image sentinel\nrouting bias)", fillcolor="#fee2e2", style="rounded,filled,dashed"];
+      G_lin -> G_topk -> G_rsf;
+      G_vl -> G_topk [style=dashed];
+    }
+
+    subgraph cluster_routed {
+      label="Routed experts (384 x W4A8 packed: int4 weight, int8 act)"; style="rounded,filled"; fillcolor="#ffffff"; color="#f87171"; fontcolor="#991b1b"; fontsize=11;
+      R_q    [label="per-token int8 quant\n+ argsort_bincount_with_inv_pos", fillcolor="#fecaca"];
+      R_perm [label="expand_moe_input\n[T x 6, 5120]", fillcolor="#fecaca"];
+      R_w13  [label="w4a8_group_gemm\ngate + up fused\n[5120 to 2 x 2304]", fillcolor="#fecaca"];
+      R_swig [label="SwiGLU + clamp\nswiglu_limit = 10\n+ requant", fillcolor="#fecaca"];
+      R_w2   [label="w4a8_group_gemm\ndown [2304 to 5120]\n-> a3 [T x 6, 5120]", fillcolor="#fecaca"];
+      R_q -> R_perm -> R_w13 -> R_swig -> R_w2;
+    }
+
+    subgraph cluster_shared {
+      label="Shared expert (1 x W8A8, bypasses gate)"; style="rounded,filled"; fillcolor="#ffffff"; color="#fb923c"; fontcolor="#9a3412"; fontsize=11;
+      S_gu [label="gate / up\n[5120 to 2304]", fillcolor="#fed7aa"];
+      S_a  [label="SiluAndMulWithClamp\n(limit = 10)", fillcolor="#fed7aa"];
+      S_d  [label="down\n[2304 to 5120]", fillcolor="#fed7aa"];
+      S_gu -> S_a -> S_d;
+    }
+
+    Sum [label="moe_sum\n= sum(weights x routed)\n+ shared\n(no second x 1.5)", fillcolor="#e9d5ff"];
+    G_rsf -> R_q [label="topk_ids"];
+    R_w2 -> Sum;
+    G_rsf -> Sum [label="topk_weights"];
+    S_d -> Sum;
+  }
+
+  subgraph cluster_engram {
+    label="5. Engram internals (only layers.1 and 14, before attention)"; style="rounded,filled"; fillcolor="#fefce8"; color="#ca8a04"; fontcolor="#854d0e"; fontsize=13;
+    E_hash [label="NgramHashState (model entry)\n2 / 3 / 4-gram x 8 heads\n-> hash_ids [T, 24]", fillcolor="#fef9c3"];
+    E_look [label="table lookup (prefetch stream)\nFP8 E4M3 + ue8m0 scale\n-> 6144-d rows", fillcolor="#fef9c3"];
+    E_post [label="layer entry: mhc_post\nrebuild residual [T, 4, 5120]", fillcolor="#d1fae5"];
+    E_wkv  [label="engram.wkv\n[6144 to 5 x 5120]\n4 stream keys + shared value", fillcolor="#fef9c3"];
+    E_gate [label="q_weight / k_weight [4, 5120]\nsigned-sqrt + sigmoid gate\nvalue added to each stream", fillcolor="#fef9c3"];
+    E_next [label="then this layer's\nmHC-pre (attn seam)", fillcolor="#d1fae5"];
+    E_hash -> E_look -> E_wkv;
+    E_post -> E_gate;
+    E_wkv -> E_gate -> E_next;
+  }
+
+  subgraph cluster_mtp {
+    label="6. DSpark (independent 3-layer draft model, speculative decoding)"; style="rounded,filled"; fillcolor="#faf5ff"; color="#9333ea"; fontcolor="#6b21a8"; fontsize=13;
+    M_aux    [label="aux hidden\ndspark_target_layer_ids = 36 / 37 / 38\nmhc_post + mean over 4 streams", fillcolor="#e9d5ff"];
+    M_main   [label="combine_hidden_states\nmain_proj [3 x 5120 to 5120]\n+ main_norm -> context KV", fillcolor="#e9d5ff"];
+    M_dspk   [label="DSparkDeepseekV41Model\n3 layers (layers[40..42])\nMoE 128 / top-3, SWA only\nweights mtp.{0,1,2}.*", fillcolor="#e9d5ff"];
+    M_logit  [label="compute_draft_logits\nshared target lm_head\ndraft block (block_size = 5)", fillcolor="#e9d5ff"];
+    M_verify [label="target recomputes logits\nverify / sample", fillcolor="#e9d5ff"];
+    M_aux -> M_main -> M_dspk -> M_logit -> M_verify;
+  }
+
+  subgraph cluster_output {
+    label="7. Collapse + Output"; style="rounded,filled"; fillcolor="#f5f3ff"; color="#7c3aed"; fontcolor="#5b21b6"; fontsize=13;
+    O_post [label="last layer: explicit mhc_post\n[T, 4, 5120]", fillcolor="#d1fae5"];
+    O_col  [label="4-stream collapse\npre_mix FP32 weighted sum (torch)\n[T, 4, 5120] to [T, 5120]\n(upstream: hc_collapse_triton)", fillcolor="#d1fae5"];
+    O_norm [label="final RMSNorm\n[5120]", fillcolor="#e5e7eb"];
+    O_head [label="lm_head\n[5120 to 129280]", fillcolor="#e9d5ff"];
+    O_out  [label="Logits (FP32)\n[n_logits, 129280]", fillcolor="#dbeafe"];
+    O_post -> O_col -> O_norm -> O_head -> O_out;
+  }
+
+  I_hcb -> L_mhc1;
+  I_tok -> E_hash [style=dashed, color="#ca8a04", constraint=false];
+  L_ret -> O_post [label="after layer 40"];
+  L_ret -> M_aux [label="speculative decoding", style=dashed, color="#9333ea", fontcolor="#6b21a8", constraint=false];
+  O_out -> M_verify [style=dashed, color="#9333ea", constraint=false];
+}

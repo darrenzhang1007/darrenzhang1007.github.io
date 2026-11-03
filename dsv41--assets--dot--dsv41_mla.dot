@@ -1,0 +1,118 @@
+// @desc 同一份 attn_norm hidden 并发三路投影。q_lora 的 RMSNorm 在 wq_b 之前，Indexer 用这份 q_lora，K 来自 compressor latent。SWA 每层都写；压缩 KV 与 Indexer 只在 source 层持有，其余层复用。
+// @panel (3) MLA / Indexer / Compressor / cache / O 投影 · M5 M6 M7 M9
+digraph dsv41_mla {
+  graph [
+    rankdir=TB,
+    bgcolor="#f7f8fa",
+    pad=0.45,
+    nodesep=0.28,
+    ranksep=0.38,
+    splines=true,
+    fontname="Noto Sans CJK SC",
+    fontsize=16,
+    label="MLA · 并发投影、两级缓存与 O 投影（M5 / M6 / M7 / M9）",
+    labelloc=t,
+    fontcolor="#1c2430"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Noto Sans CJK SC",
+    fontsize=11,
+    color="#8aa0b4",
+    fontcolor="#1c2430",
+    fillcolor="#ffffff",
+    margin="0.14,0.09"
+  ];
+  edge [
+    fontname="Noto Sans CJK SC",
+    fontsize=10,
+    color="#5c6b76",
+    fontcolor="#33404a",
+    arrowsize=0.65,
+    penwidth=1.05
+  ];
+
+  subgraph cluster_qkv {
+    label="Q / KV 投影（每层）";
+    fontsize=13;
+    style="rounded,filled";
+    color="#b7c9c3";
+    fillcolor="#f4faf8";
+    margin=12;
+    h [label="M5 · layer.attn.forward\nIluvatarDeepseekV41MultiHeadLatentAttentionWrapper\nhidden_states = 层内 x [T,5120]\nattention_impl 经注册算子进入", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    fan [label="attn_gemm_parallel_execute\n三路同时展开\n不是 fused 之后串行", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    wqa [label="fused_wqa_wkv\nW8A8 [5120→1792]\nqr 1280 + kv 512", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    qn [label="_C.fused_q_kv_rms_norm_quant\nq_norm + kv_norm\nqr 另出 int8+scale", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    ql [label="M5 / M6 · normed qr\n文档 q_lora = 代码 qr\n[T,1280] bf16\n先于 wq_b，另送 indexer(...)", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    wqb [label="wq_b\n[1280→64×512]\nQ [T,64,512]", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+  }
+
+  subgraph cluster_cache {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#d2c6a6";
+    fillcolor="#fbf8f1";
+    margin=12;
+    swa [label="_C.fused_deepseek_v4_qnorm_rope_kv_bf16_cache_insert\nQ RoPE 448+64\nSWA 窗 128 · bf16 [页,槽,512]", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#f8f3e6", color="#a89062"];
+    score [label="M7 · compressor.fused_wkv_wgate\n_C.gemm(hidden_states,weight,...)\n→ kv_score fp32\nratio-2:1024；ratio-1:512", URL="../../README.md#压缩路径latent先算好再分别交给两个下游", tooltip="M7：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    comp [label="M7 · compressor(kv_score,positions)\nDeepseekCompressor.forward\n返回 latent [T,512]，pre-RoPE\nratio-2：仅组边界行有效", URL="../../README.md#压缩路径latent先算好再分别交给两个下游", tooltip="M7：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    ckv [label="M7 · compressor.insert_cache(\nlatent,positions,rotary_emb) → None\nrope_quant_insert 写 bf16 压缩 KV\n非 source 层只读共享 cache", URL="../../README.md#压缩路径latent先算好再分别交给两个下游", tooltip="M7：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f8f3e6", color="#a89062"];
+  }
+
+  subgraph cluster_idx {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#c9bdd8";
+    fillcolor="#f7f4fa";
+    margin=12;
+    wproj [label="indexer.weights_proj\n仅 index-source\n[5120→32] bf16", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    ik [label="latent-K（owns_k）\nwk 512→128 · k_norm\nRoPE · FP8 写入\nIndexer K cache", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f8f3e6", color="#a89062"];
+    iq [label="M6 · attn.indexer(qr,latent,...)\nDeepseekV4Indexer.forward\n需打分：wq_b + RoPE/quant\n→ index_q / scale / weights\n短上下文：(None,None,None)", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    logits [label="M6 · indexer.indexer_op(...)\nSparseAttnIndexer\nfp8_(paged_)mqa_logits（ixtriturbo）\n仅需打分时执行", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    cand [label="M6 · 候选共享\nL20 写 candidate_block_buffer\n[T,candidate_topk_blocks]：块 id\n每块覆盖8位置；L24+候选掩码", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    topk [label="M6 · 写 topk_indices_buffer [*,512]\n长上下文：score → top-k\n短上下文直接填，owns_k仍写K\n不是 indexer(...) 的返回值", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+    reuse [label="非 source 层\n不拥有 compressor/indexer\n复用压缩 KV 与\ntopk_indices_buffer", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+  }
+
+  subgraph cluster_mla {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#b7c9c3";
+    fillcolor="#f4faf8";
+    margin=12;
+    remap [label="compute_global_topk_indices_and_lens\n压缩下标→物理 slot", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    mla [label="M5 · attn.mla_attn → 写 o\nprefill: flash_mla_sparse\ndecode: dsv4_flash_mla_with_kv_cache\nSWA + 压缩 KV + top-k；attn_sink\no [T,64,512] → M9", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    inv [label="M9 · attn._o_proj(o,positions)\n→ deepseek_v4_o_proj（共用 helper）\nW8A8: fused_inv_rope_int8_quant\nBF16 权重另走 inverse_rope_bf16", URL="../../README.md#o投影把多头结果送回decoder", tooltip="M9：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    woa [label="M9 · attn.wo_a 分组投影\n中间变量 z；8组 × [4096→1024]\nTP 必须整除 o_groups=8\nTP=1/2/4/8，每组不跨TP切开", URL="../../README.md#o投影把多头结果送回decoder", tooltip="M9：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    wob [label="M9 · attn.wo_b(z.flatten(1))\n[8×1024→5120]（全局）\nreturn [T,5120] → 层内 x", URL="../../README.md#o投影把多头结果送回decoder", tooltip="M9：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+  }
+
+  h -> fan;
+  fan -> wqa;
+  fan -> score [style=dashed];
+  fan -> wproj [style=dashed];
+  wqa -> qn -> ql;
+  qn -> wqb [label="W8A8: qr_i8 + scale"];
+  ql -> wqb [style=dashed, label="BF16 权重分支"];
+  wqb -> swa [label="Q"];
+  qn -> swa [label="kv bf16", constraint=false];
+  score -> comp -> ckv [style=dashed];
+  comp -> ik [style=dashed];
+  ql -> iq [style=dashed, label="q_lora"];
+  wproj -> iq [style=dashed];
+  ik -> logits [style=dashed];
+  iq -> logits [style=dashed];
+    logits -> cand -> topk [style=dashed];
+    iq -> topk [style=dotted];
+  topk -> reuse [style=dashed];
+  topk -> remap [style=dashed];
+  ckv -> mla [style=dashed, label="共享"];
+  swa -> mla [label="RoPE 后 Q + SWA"];
+  reuse -> remap;
+  remap -> mla;
+  mla -> inv -> woa -> wob;
+}

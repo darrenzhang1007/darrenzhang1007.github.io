@@ -1,0 +1,247 @@
+digraph DSV41CallArchitecture {
+  graph [
+    rankdir=TB,
+    bgcolor="#f8fafc",
+    pad=0.28,
+    nodesep=0.45,
+    ranksep=0.62,
+    splines=true,
+    fontname="Microsoft YaHei",
+    label="DeepSeek-V4.1-Flash 调用逻辑与模型结构",
+    labelloc=t,
+    fontsize=22,
+    fontcolor="#0f172a"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Microsoft YaHei",
+    fontsize=11,
+    color="#64748b",
+    fontcolor="#0f172a",
+    fillcolor="#ffffff",
+    margin="0.14,0.10"
+  ];
+  edge [
+    fontname="Microsoft YaHei",
+    fontsize=9,
+    color="#475569",
+    fontcolor="#334155",
+    arrowsize=0.72,
+    penwidth=1.2
+  ];
+
+  input [
+    label="输入\ninput_ids · positions · 可选 image",
+    fillcolor="#dbeafe",
+    color="#3b82f6"
+  ];
+  vl [
+    label="DeepseekV41ForCausalLM\nVL 包装 · Vision Tower + Aligner（可选）",
+    fillcolor="#e0f2fe",
+    color="#0284c7"
+  ];
+  causal [
+    label="DeepseekV41LLMForCausalLM.forward\n→ DeepseekV4Model.forward",
+    fillcolor="#dbeafe",
+    color="#2563eb"
+  ];
+  embed [
+    label="VocabParallelEmbedding\n[T, 5120]",
+    fillcolor="#ccfbf1",
+    color="#0f766e"
+  ];
+  engram [
+    label="Engram 预计算（主干入口）\nn-gram hash 24 列 + 预取查表\nL1 / L14 层入口：mhc_post 重建四流\n→ 注入 → 本层 pre（Attention 之前）",
+    fillcolor="#fef9c3",
+    color="#ca8a04"
+  ];
+
+  subgraph cluster_decoder {
+    label="40 × DeepseekV4DecoderLayer（L0…L39）";
+    labelloc=t;
+    fontsize=14;
+    fontname="Microsoft YaHei";
+    fontcolor="#92400e";
+    color="#f59e0b";
+    fillcolor="#fffbeb";
+    style="rounded,filled";
+    penwidth=1.5;
+    margin=18;
+
+    mhc_attn [
+      label="mHC Attention seam\nmhc_pre_delayed → attn_norm\n[T,4,5120] → [T,5120]",
+      fillcolor="#dcfce7",
+      color="#16a34a"
+    ];
+
+    subgraph cluster_mla {
+      label="MLA：输入投影 fan-out（非纯串行）";
+      fontsize=12;
+      fontname="Microsoft YaHei";
+      fontcolor="#9a3412";
+      color="#fb923c";
+      fillcolor="#fff7ed";
+      style="rounded,filled";
+
+      qkv [
+        label="fused_wqa_wkv · W8A8\n5120 → qr 1280 + kv 512\nq_norm · RoPE · SWA KV insert（窗 128）",
+        fillcolor="#ffedd5",
+        color="#f97316"
+      ];
+      compressor [
+        label="Compressor（仅 kv-source：L2/8/14/20）\nkv_score → compressed latent\n写入 compressed KV cache",
+        fillcolor="#ffedd5",
+        color="#ea580c",
+        style="rounded,filled,dashed"
+      ];
+      indexer [
+        label="Indexer（仅 index-source 层）\nL2/8/14/20/24/28/32/36\n归一化 qr + latent → 块打分\nL20 发布 2048 候选块 → 选 top-512",
+        fillcolor="#cffafe",
+        color="#0891b2",
+        style="rounded,filled,dashed"
+      ];
+      sparse [
+        label="Sparse MLA（attn_sink [64] 是 kernel 输入）\nprefill: flash_mla_sparse\ndecode: dsv4_flash_mla_with_kv_cache\nQ × (SWA KV ∪ compressed KV ∪ top-k)",
+        fillcolor="#fce7f3",
+        color="#db2777"
+      ];
+      oproj [
+        label="O Projection\ninv-RoPE → 8 组 wo_a [4096→1024] → wo_b\n输出 [T, 5120]（TP 须整除 8）",
+        fillcolor="#ffedd5",
+        color="#f97316"
+      ];
+
+      { rank=same; qkv; compressor; indexer; }
+      qkv -> sparse [label="Q + SWA KV"];
+      compressor -> sparse [label="compressed cache", style=dashed];
+      indexer -> sparse [label="top-k indices", style=dashed];
+      sparse -> oproj;
+    }
+
+    mhc_ffn [
+      label="mHC FFN seam\nmhc_pre_delayed → ffn_norm\n折叠 attention 子层 post\n[T,4,5120] → [T,5120]",
+      fillcolor="#dcfce7",
+      color="#16a34a"
+    ];
+
+    subgraph cluster_moe {
+      label="MoE：shared 与 router 并行吃同一份 ffn_norm";
+      fontsize=12;
+      fontname="Microsoft YaHei";
+      fontcolor="#991b1b";
+      color="#ef4444";
+      fillcolor="#fef2f2";
+      style="rounded,filled";
+
+      gate [
+        label="Gate / Router\n384 专家 · sqrtsoftplus → top-6\n路由权重已含 ×1.5",
+        fillcolor="#fae8ff",
+        color="#c026d3"
+      ];
+      experts [
+        label="384 Routed Experts\nW4A8 packed（int4 权重 · int8 激活）\ngate/up fused [5120→2×2304] → down",
+        fillcolor="#fee2e2",
+        color="#dc2626"
+      ];
+      shared [
+        label="Shared Expert\nW8A8 · SwiGLU（limit=10）\n不经过 Gate",
+        fillcolor="#ffedd5",
+        color="#ea580c"
+      ];
+      moe_sum [
+        label="聚合 moe_sum\nΣ(weight · routed) + shared\n1.5 不重复乘 · 输出 [T,5120]",
+        fillcolor="#fee2e2",
+        color="#dc2626"
+      ];
+
+      { rank=same; gate; shared; }
+      gate -> experts [label="top-6"];
+      experts -> moe_sum;
+      shared -> moe_sum;
+    }
+
+    mhc_attn -> qkv [label="hidden"];
+    mhc_attn -> compressor [label="kv_score 路", style=dashed];
+    mhc_attn -> indexer [label="indexer_weights 路", style=dashed];
+    oproj -> mhc_ffn [label="attention 输出"];
+    mhc_ffn -> gate;
+    mhc_ffn -> shared [label="同一份 hidden"];
+    moe_sum -> mhc_attn [
+      label="下一层：x / residual / mix / ffn_pre\n延迟到下一层 mhc_pre 才做 post",
+      style=dashed,
+      color="#16a34a",
+      fontcolor="#166534",
+      constraint=false
+    ];
+  }
+
+  aux [
+    label="Aux 重建（投机解码时）\n选定层结束后 mhc_post\n再对 hc 流 mean\ndspark_target_layer_ids（基线 36/37/38）",
+    fillcolor="#f3e8ff",
+    color="#9333ea"
+  ];
+  mhc_last [
+    label="末层显式 mhc_post\n（循环内不再折叠末层 post）",
+    fillcolor="#dcfce7",
+    color="#16a34a"
+  ];
+  collapse [
+    label="四流坍缩（pre_mix FP32 加权和）\n[T,4,5120] → [T,5120]\n上游对应 hc_collapse_triton",
+    fillcolor="#dcfce7",
+    color="#16a34a"
+  ];
+  norm [
+    label="Final RMSNorm\nhidden_size=5120",
+    fillcolor="#e2e8f0",
+    color="#64748b"
+  ];
+  head [
+    label="ParallelLMHead\n5120 → 129280",
+    fillcolor="#ede9fe",
+    color="#7c3aed"
+  ];
+  target_logits [
+    label="Target logits",
+    fillcolor="#dbeafe",
+    color="#2563eb"
+  ];
+  dspark [
+    label="DSpark Draft（独立模型）\n默认 3 层 · MoE 128/top-3 · 纯 SWA\nmain_proj(concat 3×5120 aux)\n共享 target embed / lm_head",
+    fillcolor="#f3e8ff",
+    color="#9333ea"
+  ];
+  verify [
+    label="Target 验签 / Sampling\ndraft token 块（block_size=5）\n由 target 重算 logits 接受或回退",
+    fillcolor="#ede9fe",
+    color="#7c3aed"
+  ];
+
+  input -> vl [label="文本 / 图像"];
+  vl -> causal [label="language_model"];
+  causal -> embed;
+  embed -> mhc_attn [label="首层广播 4 条 hc 流"];
+  engram -> mhc_attn [
+    label="L1 / L14 注入残差流",
+    style=dashed,
+    color="#ca8a04",
+    fontcolor="#854d0e"
+  ];
+  moe_sum -> mhc_last [label="完成第 40 层"];
+  moe_sum -> aux [
+    label="选定层之后",
+    style=dashed,
+    color="#9333ea",
+    fontcolor="#7e22ce"
+  ];
+  mhc_last -> collapse;
+  collapse -> norm -> head -> target_logits;
+  aux -> dspark [style=dashed, color="#9333ea", fontcolor="#7e22ce"];
+  dspark -> verify [
+    label="draft logits / tokens",
+    style=dashed,
+    color="#9333ea",
+    fontcolor="#7e22ce"
+  ];
+  target_logits -> verify;
+}

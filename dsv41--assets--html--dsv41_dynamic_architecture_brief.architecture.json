@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DeepSeek-V4.1-Flash 动态代码结构",
+    "locale": "zh-CN",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "viewBox": [980, 760],
+    "views": [
+      {
+        "id": "main-forward",
+        "label": "主模型 Forward",
+        "focus": ["input", "entry", "embedding", "mhc-attn", "mla", "mhc-ffn", "moe", "target-head", "verify"],
+        "note": "沿主路径播放输入、40 层 Decoder、mHC collapse、target logits 与采样。"
+      },
+      {
+        "id": "attention",
+        "label": "MLA 稀疏注意力",
+        "focus": ["mhc-attn", "mla"],
+        "note": "观察 mHC 折叠后 Q/KV、Compressor、Indexer、Sparse MLA 与 O Projection。"
+      },
+      {
+        "id": "moe",
+        "label": "MoE 并行分支",
+        "focus": ["mhc-ffn", "moe"],
+        "note": "Gate/routed experts 与 Shared Expert 并行接收同一份 ffn_norm hidden。"
+      },
+      {
+        "id": "dspark",
+        "label": "DSpark 投机路径",
+        "focus": ["moe", "aux-recon", "dspark", "target-head", "verify"],
+        "note": "选定目标层重建 aux hidden，DSpark 给出候选，再由 target logits 验签。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "input",
+      "type": "external",
+      "label": "推理输入",
+      "sublabel": "input_ids · positions · 可选 image",
+      "pos": [20, 90],
+      "size": [145, 74]
+    },
+    {
+      "id": "entry",
+      "type": "frontend",
+      "label": "模型入口",
+      "sublabel": "VL Wrapper → LLMForCausalLM.forward",
+      "pos": [210, 90],
+      "size": [155, 74]
+    },
+    {
+      "id": "embedding",
+      "type": "database",
+      "label": "Embedding",
+      "sublabel": "VocabParallelEmbedding · [T,5120]",
+      "pos": [405, 90],
+      "size": [150, 74]
+    },
+    {
+      "id": "engram",
+      "type": "database",
+      "label": "Engram",
+      "sublabel": "n-gram hash + gather · L1/L14",
+      "tag": "可选注入",
+      "pos": [20, 300],
+      "size": [155, 78]
+    },
+    {
+      "id": "mhc-attn",
+      "type": "messagebus",
+      "label": "mHC Attention seam",
+      "sublabel": "mhc_pre_delayed → attn_norm",
+      "tag": "40 层内 · 4流→2维",
+      "pos": [210, 300],
+      "size": [155, 78]
+    },
+    {
+      "id": "mla",
+      "type": "cloud",
+      "label": "MLA + Indexer",
+      "sublabel": "三路 fan-out · Sparse MLA · O Projection",
+      "tag": "attn_sink 在 kernel 内",
+      "pos": [405, 300],
+      "size": [165, 78]
+    },
+    {
+      "id": "mhc-ffn",
+      "type": "messagebus",
+      "label": "mHC FFN seam",
+      "sublabel": "折叠 Attention post → ffn_norm",
+      "tag": "40 层内 · 4流→2维",
+      "pos": [610, 300],
+      "size": [155, 78]
+    },
+    {
+      "id": "moe",
+      "type": "backend",
+      "label": "MoE",
+      "sublabel": "Gate/top-6 + 384 routed ∥ shared",
+      "tag": "W4A8 routed · W8A8 shared",
+      "pos": [805, 300],
+      "size": [165, 78]
+    },
+    {
+      "id": "aux-recon",
+      "type": "messagebus",
+      "label": "Aux Hidden 重建",
+      "sublabel": "选定层 mhc_post → mean(hc)",
+      "tag": "dspark_target_layer_ids",
+      "pos": [405, 510],
+      "size": [170, 78]
+    },
+    {
+      "id": "target-head",
+      "type": "backend",
+      "label": "Target Head",
+      "sublabel": "mhc_post → collapse → norm → lm_head",
+      "tag": "target logits",
+      "pos": [805, 510],
+      "size": [165, 78]
+    },
+    {
+      "id": "dspark",
+      "type": "cloud",
+      "label": "DSpark Draft",
+      "sublabel": "main_proj(aux) · 默认 3 draft layers",
+      "tag": "共享 target embed/lm_head",
+      "pos": [610, 510],
+      "size": [180, 78]
+    },
+    {
+      "id": "verify",
+      "type": "external",
+      "label": "验签与采样",
+      "sublabel": "target logits 接受候选或回退",
+      "pos": [815, 660],
+      "size": [145, 74]
+    }
+  ],
+  "connections": [
+    {
+      "id": "input-entry",
+      "from": "input",
+      "to": "entry",
+      "variant": "emphasis"
+    },
+    {
+      "id": "entry-embedding",
+      "from": "entry",
+      "to": "embedding"
+    },
+    {
+      "id": "embedding-attn",
+      "from": "embedding",
+      "to": "mhc-attn"
+    },
+    {
+      "id": "engram-attn",
+      "from": "engram",
+      "to": "mhc-attn",
+      "label": "L1/L14 注入",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [195, 392]
+    },
+    {
+      "id": "attn-mla",
+      "from": "mhc-attn",
+      "to": "mla"
+    },
+    {
+      "id": "mla-ffn",
+      "from": "mla",
+      "to": "mhc-ffn"
+    },
+    {
+      "id": "ffn-moe",
+      "from": "mhc-ffn",
+      "to": "moe"
+    },
+    {
+      "id": "moe-head",
+      "from": "moe",
+      "to": "target-head",
+      "label": "第 40 层完成",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [935, 450]
+    },
+    {
+      "id": "moe-aux",
+      "from": "moe",
+      "to": "aux-recon",
+      "label": "选定层后",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "aux-dspark",
+      "from": "aux-recon",
+      "to": "dspark",
+      "variant": "dashed"
+    },
+    {
+      "id": "head-verify",
+      "from": "target-head",
+      "to": "verify",
+      "label": "target logits",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [888, 602]
+    },
+    {
+      "id": "dspark-verify",
+      "from": "dspark",
+      "to": "verify",
+      "label": "draft 候选",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "mHC",
+      "items": [
+        "子层计算前折叠 4 条 residual stream",
+        "MoE 后的 post 延迟到下一层 pre；末层在循环外显式 post"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "MLA",
+      "items": [
+        "同一 hidden fan-out 到 Q/KV、Compressor、Indexer",
+        "attn_sink 是 Sparse MLA kernel 输入；O Projection 只做 inv-RoPE/wo_a/wo_b"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "MoE",
+      "items": [
+        "Gate/routed 与 Shared Expert 并行接收 ffn_norm hidden",
+        "384 routed × top-6 + 1 shared；scaling 1.5 只计入路由权重一次"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "DSpark",
+      "items": [
+        "aux 层号来自 dspark_target_layer_ids",
+        "默认 3 个 draft layer；候选必须由 target logits 验签"
+      ]
+    }
+  ]
+}

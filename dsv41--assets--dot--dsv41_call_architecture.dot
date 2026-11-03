@@ -1,0 +1,223 @@
+// @desc 顶部按①全模型②一层③Attention④Engram⑤DSpark分步阅读，下方保留七块接口面板。Decoder / MLA / MoE 的节点正文由渲染脚本从分图 DOT 原样纳入，这里只写输入、Engram、DSpark 和输出。
+// @panel-file 本文件是总板骨架；分图在 // @INSERT_LOCALS 处按节点 ID 加前缀后插入。
+digraph dsv41_overview {
+  graph [
+    rankdir=TB,
+    bgcolor="#f7f8fa",
+    pad=0.5,
+    nodesep=0.32,
+    ranksep=0.40,
+    splines=true,
+    pack=12,
+    packmode="array_u2",
+    fontname="Noto Sans CJK SC",
+    fontsize=18,
+    label="DeepSeek-V4.1-Flash 架构总板\n七块面板对应 M1–M12；面板 (2)(3)(4) 与分图共用 DOT 正文",
+    labelloc=t,
+    fontcolor="#1c2430"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Noto Sans CJK SC",
+    fontsize=12,
+    color="#8aa0b4",
+    fontcolor="#1c2430",
+    fillcolor="#ffffff",
+    margin="0.16,0.10"
+  ];
+  edge [
+    fontname="Noto Sans CJK SC",
+    fontsize=11,
+    color="#5c6b76",
+    fontcolor="#33404a",
+    arrowsize=0.7,
+    penwidth=1.1
+  ];
+
+
+
+  subgraph cluster_flow {
+    // Five independently laid out reading steps; no cross-section edges.
+    subgraph cluster_read_main {
+      label="① 全模型 · 从左到右读完主干";
+      fontsize=18; style="rounded,filled"; color="#a8bfd3"; fillcolor="#ffffff"; margin=20;
+      node [fontsize=15, margin="0.2,0.14"];
+      edge [fontsize=12, color="#3776a8", fontcolor="#285b80", penwidth=1.6];
+      r_input [label="M1 · VL / 文本塔入口\nDeepseekV41ForCausalLM.forward\nlanguage_model → model\n向右展开主干内部", URL="../../README.md#22-从模型入口到-embeddingm1--m2", tooltip="M1：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa"];
+      r_emb [label="M2 · model.embed_tokens\nembed_input_ids(input_ids)\nhidden_states [T,5120]", URL="../../README.md#词表查表m2", tooltip="M2：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa"];
+      r_dec [label="M4 · model.layers[0:40]\nDeepseekV4DecoderLayer.forward\n层间五个状态变量 S（见②）", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1"];
+      r_tail [label="M12 · 主干 forward 收尾\nmhc_post → collapse → norm\n末 PP 返回 hidden [T,5120]", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8"];
+      r_head [label="M12 · 另调 compute_logits\nrunner 先按 logits_indices 选行\nlogits_processor / lm_head\nlogits [n_logits,129280]", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8"];
+      r_sample [label="框架采样\nSampler\n得到下一 token", fillcolor="#f8eee8"];
+      r_input -> r_emb [label="input_ids"];
+      r_emb -> r_dec [label="[T,5120]"];
+      r_dec -> r_tail [label="最终状态 S"];
+      r_tail -> r_head [label="[T,5120]"];
+      r_head -> r_sample [label="logits"];
+    }
+    subgraph cluster_read_layer {
+      label="② 展开一层 Decoder（M3 / M4）· 输入 S_l → 输出 S_(l+1)，按这一行重复40次\nS = (x,residual,post_mix,res_mix,pre_mix) 是文档状态记号；参数分别传入；层间 pre_mix = 上层 ffn_pre";
+      fontsize=17; style="rounded,filled"; color="#a7c4b9"; fillcolor="#f4faf8"; margin=20;
+      node [fontsize=14, margin="0.2,0.14"];
+      edge [fontsize=12, color="#3776a8", fontcolor="#285b80", penwidth=1.6];
+      r_li [label="M4 · layer.forward(...)\n状态分别传参，非 tuple 入参\nL1/L14 先做 Engram（见④）", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#fff0df"];
+      r_ap [label="M3 · self.mhc_pre_delayed\n层间 pre_mix → attn_pre\n再 self.attn_norm(x)", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1"];
+      r_attn [label="M5 · self.attn(positions,x,None)\nMLA / Indexer / Compressor / O\n[A] 输入 → [B] 输出（见③）", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#efedf9"];
+      r_fp [label="M3 · self.mhc_pre_delayed\nattn_pre → ffn_pre\n再 self.ffn_norm(x)", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1"];
+      r_moe [label="M8 · self.ffn(x,input_ids)\nDeepseekV4MoE.forward\n返回 x [T,5120]", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#fbf1df"];
+      r_lo [label="M4 · return 五元组 S_(l+1)\nx,residual,post_mix,res_mix,ffn_pre\n主干将 ffn_pre 接成 pre_mix", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#fff0df"];
+      r_li -> r_ap [label="状态 S_l"];
+      r_ap -> r_attn [label="[A] x [T,5120]"];
+      r_attn -> r_fp [label="[B] out [T,5120]"];
+      r_fp -> r_moe [label="x [T,5120]"];
+      r_moe -> r_lo [label="MoE 输出 + 保留状态"];
+    }
+    subgraph cluster_read_attention {
+      label="③ 展开②的 Attention · [A] → [B]，三路在 Sparse MLA 汇合\nCompressor 仅 kv-source；Indexer 仅 index-source，其他层复用 top-k；L0/L1 只走 SWA。完整接口见MLA页或总图(3)";
+      fontsize=17; style="rounded,filled"; color="#c2b9d8"; fillcolor="#f7f5fb"; margin=20;
+      node [fontsize=14, margin="0.2,0.14"];
+      edge [fontsize=12, color="#5d65a2", fontcolor="#454d82", penwidth=1.6];
+      r_ai [label="[A] · attn.attention_impl\nhidden_states = 层内 x\n三路投影 → qr / kv / kv_score", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#efedf9"];
+      r_aq [label="M5 · attn.wq_b / RoPE\nnormed qr → Q [T,64,512]\nkv 写本层 SWA cache", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#efedf9"];
+      r_ac [label="M7 · attn.compressor\n(kv_score,positions) → latent\n仅 kv-source；[T,512]", URL="../../README.md#压缩路径latent先算好再分别交给两个下游", tooltip="M7：正文段落含代码对象、调用点与变量对应", fillcolor="#edf6e8"];
+      r_akv [label="M7 · compressor.insert_cache\n(latent,positions,rotary_emb)\n返回 None；写共享压缩 KV", URL="../../README.md#压缩路径latent先算好再分别交给两个下游", tooltip="M7：正文段落含代码对象、调用点与变量对应", shape=cylinder, fillcolor="#edf6e8"];
+      r_ax [label="M6 · attn.indexer(...)\n返回 index_q / scale / weights\nindexer_op(...) 写 top-k buffer\n短上下文直接填 buffer", URL="../../README.md#检索路径准备打分输入再把选中位置写入共享buffer", tooltip="M6：正文段落含代码对象、调用点与变量对应", fillcolor="#edf6e8"];
+      r_am [label="M5 · attn.mla_attn\nQ + SWA + 压缩 KV + top-k\n写 o [T,64,512]", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#efedf9"];
+      r_ao [label="[B] · M9 attn._o_proj(o,positions)\nhelper: deepseek_v4_o_proj\nwo_a / wo_b → [T,5120]", URL="../../README.md#o投影把多头结果送回decoder", tooltip="M9：正文段落含代码对象、调用点与变量对应", fillcolor="#efedf9"];
+      r_ai -> r_aq [label="normed qr / kv"];
+      r_aq -> r_am [label="Q + 本层 SWA KV"];
+      r_ai -> r_ac [label="kv_score"];
+      r_ac -> r_akv [label="latent → RoPE"];
+      r_akv -> r_am [label="共享压缩 KV"];
+      r_ai -> r_ax [label="normed q_lora\n+ indexer_weights"];
+      r_ac -> r_ax [label="pre-RoPE latent"];
+      r_ax -> r_am [label="top-k slots\n复用层直接读 buffer"];
+      r_am -> r_ao [label="attention out"];
+    }
+    subgraph cluster_read_engram {
+      label="④ Engram 条件支路 · 只在 L1 / L14 的 Attention 前执行";
+      fontsize=17; style="rounded,filled"; color="#c9bdd8"; fillcolor="#f7f4fa"; margin=20;
+      node [fontsize=14, margin="0.2,0.14"];
+      edge [fontsize=12, color="#84639a", fontcolor="#6d4a84", penwidth=1.6];
+      r_ei [label="②的本层入口 S_l\nx / residual / mix", fillcolor="#fff0df"];
+      r_ep [label="mhc_post\n重建完整 hc\n[T,4,5120]", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1"];
+      r_eh [label="M10 · model.engram_hash\nNgramHashState：循环前一次\n本层 hash_ids [T,24]", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_eg [label="M10 · layer.engram(...)\nIluvatarEngram.forward（继承）\nhidden_states = residual\nwkv / gate 后返回完整 hc", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_eo [label="更新后的完整 hc\n回②的 Attention mHC\n注入后才 pre", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#fff0df"];
+      r_ei -> r_ep [label="入口状态"];
+      r_ep -> r_eg [label="hc"];
+      r_eh -> r_eg [label="hash / mask"];
+      r_eg -> r_eo [label="[T,4,5120]"];
+    }
+    subgraph cluster_read_dspark {
+      label="⑤ DSpark 条件支路 · 仅启用投机解码时执行（M11）";
+      fontsize=17; style="rounded,filled"; color="#b7c6ce"; fillcolor="#f4f7f8"; margin=20;
+      node [fontsize=14, margin="0.2,0.14"];
+      edge [fontsize=12, color="#526f91", fontcolor="#3e5878", penwidth=1.6];
+      r_di [label="M11 · target aux_hidden_states\n目标层 mhc_post → mean\n基线 L36 / L37 / L38", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_dm [label="draft.combine_hidden_states\nF.linear(aux,main_proj.weight)\n→ main_norm → main_x", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1"];
+      r_dd [label="M11 · 模型接口，分别调用\ndraft.forward → head_hidden [T,5120]\ncompute_draft_logits → base logits\n3层 draft 读取 context KV", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_dp [label="框架生成 proposal token 块\n调用 Markov / confidence 接口\n不是 draft.forward 的返回值", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_dv [label="Target 重算\n候选重新走①的主干\n得到验证用 target logits", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f1e9f8"];
+      r_do [label="框架验签 / 采样\n接受候选或补采样\n输出 tokens", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8"];
+      r_dc [label="precompute_and_store_context_kv\nmain_x → 各 draft 层 cache\n不直接喂入 draft.forward", fillcolor="#f8f3e6", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11"];
+      r_de [label="draft token 输入\ninput_ids / positions\n或 inputs_embeds\nPP>1 时可自载 embedding", fillcolor="#e7f0fa", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11"];
+      r_di -> r_dm [label="concat aux\n[T,3×5120]"];
+      r_dm -> r_dc [label="main_x"];
+      r_dc -> r_dd [label="读 context KV"];
+      r_de -> r_dd [label="token / embeddings"];
+      r_dd -> r_dp [label="base logits / head_hidden"];
+      r_dp -> r_dv [label="候选 / 概率"];
+      r_dv -> r_do [label="验签结果"];
+    }
+  }
+
+  subgraph cluster_p1 {
+    label="(1) 输入 / 嵌入 / VL    M1 · M2";
+    fontsize=15;
+    fontname="Noto Sans CJK SC";
+    style="rounded,filled";
+    color="#b9c9d8";
+    fillcolor="#f3f7fb";
+    margin=14;
+    ids [label="input_ids [T] int64\n展平 token", URL="../../README.md#22-从模型入口到-embeddingm1--m2", tooltip="M1：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    pos [label="positions [T]\n与 input_ids 对齐", URL="../../README.md#22-从模型入口到-embeddingm1--m2", tooltip="M1：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    vl [label="M1 · VL 外壳 forward\nDeepseekV41ForCausalLM\n委派 self.language_model(...)\n本区展开内部，不是返回链", URL="../../README.md#22-从模型入口到-embeddingm1--m2", tooltip="M1：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    emb [label="M2 · model.embed_tokens\nembed_input_ids(input_ids)\nhidden_states [T,5120]\ninputs_embeds 存在时绕过", URL="../../README.md#词表查表m2", tooltip="M2：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    bc [label="M3 / M4 · 首层 layer.forward\nx.unsqueeze(1).expand(...)\nresidual [T,4,5120]\n再 self.mhc_pre_delayed", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    llm [label="M1 · language_model\nDeepseekV41LLMForCausalLM.forward\nself.model: DeepseekV4Model\n末 PP 返回二维 hidden；logits 另算", fillcolor="#e7f0fa", URL="../../README.md#22-从模型入口到-embeddingm1--m2"];
+    ids -> vl;
+    pos -> vl;
+    vl -> llm [label="委派"];
+    llm -> emb [label="展开 model 内部"];
+    emb -> bc;
+  }
+
+  // @INSERT_LOCALS
+
+  subgraph cluster_p5 {
+    label="(5) Engram 哈希 / 查表 / wkv / gate / 注入    M10\n只在 L1 / L14，且在该层 Attention 之前";
+    fontsize=15;
+    fontname="Noto Sans CJK SC";
+    style="rounded,filled";
+    color="#c9bdd8";
+    fillcolor="#f7f4fa";
+    margin=14;
+    ng [label="M10 · model.engram_hash\nNgramHashState\nSWA slot hash_cache\n+ lookback_token_ids", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    cmap [label="build_compressed_token_map\n文本归一后压缩 id\n压缩词表 99092", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    hker [label="_hash_ids_kernel\n2/3/4-gram × 8 head\n进 Decoder 前整批一次", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    hids [label="M10 · 层内 hash_ids [T,24]\nengram_hashes[:,layer_hash_index]\n另传 engram_mask → token_mask", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    eemb [label="ParallelEngramEmbedding\n[T,24,256] → [T,6144]\nfp8 表 + scale", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    wkv [label="M10 · layer.engram.wkv\n继承的 Engram.forward\n6144→25600\n4 个 key + 1 个 value", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    gker [label="_fused_engram_post_wkv_kernel\n每条 hc 流一个 gate\nsigned-sqrt 再 sigmoid", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    inj [label="M10 · residual = self.engram(...)\nhidden_states = residual [T,4,5120]\n返回注入后的完整 hc\n然后才本层 mhc_pre_delayed", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+    ng -> cmap -> hker -> hids -> eemb -> wkv -> gker -> inj;
+  }
+
+  subgraph cluster_p6 {
+    label="(6) M11 · DSparkDeepseekV41ForCausalLM\ncontext KV / 模型接口 / 框架提案与验签\n默认3层；block_size=5是token块，不是层数";
+    fontsize=15;
+    fontname="Noto Sans CJK SC";
+    style="rounded,filled";
+    color="#b7c6ce";
+    fillcolor="#f4f7f8";
+    margin=14;
+    aux [label="目标层 mhc_post\n再 mean(dim=1)\ndspark_target_layer_ids\n基线 0-based 36/37/38", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    proj [label="M11 · combine_hidden_states\nF.linear(aux_hidden_states,\nmain_proj.weight)\n3×5120 → 5120", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    mn [label="M11 · self.model.main_norm\n得到上下文 main_x\n只送 context KV 预计算", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    dl [label="M11 · draft.model.forward\nmodel.layers.40–42\n3 × DeepseekV4DecoderLayer\n输入 token / embeddings；读 context KV", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    ctx [label="M11 · precompute_and_store_context_kv\n(main_x,context_positions,...)\n写各 draft 层上下文 cache\n返回 None", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f8f3e6", color="#a89062"];
+    alias [label="M11 · draft.embed_input_ids(input_ids)\nPP>1：末 PP 自载 embedding\n否则可共享 target embedding\n得到 inputs_embeds", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    dhead [label="M11 · draft.forward 返回\n末层 mhc_post + pre_mix 加权\npre-norm head_hidden [T,5120]\n尚未计算 logits / token", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+    ver [label="框架 target 重算 / 验签 / 采样\nproposal 再走 target 主干\n预测 confidence 不等于实际验签\n块内非因果靠 SWA 索引", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11", tooltip="M11：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+    dlog [label="M11 · compute_draft_logits(hidden)\n= compute_logits(hidden)\nnorm + 共享 lm_head\n返回 base draft logits", fillcolor="#f8eee8", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11"];
+    shared_head [label="M11 · lm_head 权重\nhas_own_lm_head=False\n由加载工具关联 target 头", fillcolor="#e7f0fa", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11"];
+    proposal [label="框架 proposal token 块\nMarkov / confidence 接口另调\n不是 draft.forward 的返回值", fillcolor="#f3eef8", URL="../../README.md#54-dspark用独立草稿模型提案再交-target-验证m11"];
+    aux -> proj -> mn -> ctx;
+    ctx -> dl [label="读取已写 context KV"];
+    alias -> dl [label="token / inputs_embeds"];
+    dl -> dhead -> dlog -> proposal -> ver;
+    shared_head -> dlog [label="共享权重"];
+  }
+
+  subgraph cluster_p7 {
+    label="(7) M12 · 末层 post / 坍缩 / norm\n主干返回 → runner选行 → compute_logits";
+    fontsize=15;
+    fontname="Noto Sans CJK SC";
+    style="rounded,filled";
+    color="#d7c4ba";
+    fillcolor="#fbf6f4";
+    margin=14;
+    post [label="M12 · DeepseekV4Model.forward\n末层循环外 self.mhc_post\nx / residual / post_mix / res_mix\n重建 hidden_states [T,4,5120]", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    col [label="M12 · pre_mix = 末层 ffn_pre\n(hidden_states.float() *\npre_mix.unsqueeze(-1)).sum(dim=1)\n→ [T,5120]", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    nrm [label="M12 · 主干 self.norm\nRMSNorm → hidden_states [T,5120]\n末 PP forward 返回此值\n捕获 aux 时另附 aux 列表", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    head [label="M12 · language_model.compute_logits\nself.logits_processor(\nself.lm_head, selected_hidden)\nParallelLMHead [5120→129280]", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    logits [label="logits fp32 [n_logits,129280]\ncompute_logits 返回\n交框架 Sampler", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12", tooltip="M12：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+    select_hidden [label="框架 runner\nhidden_states[logits_indices]\n先选 hidden 行，再另调 compute_logits", fillcolor="#e7f0fa", URL="../../README.md#24-40层之后怎样得到下一个-tokenm12"];
+    post -> col -> nrm;
+    nrm -> select_hidden [label="forward 返回"];
+    select_hidden -> head [label="selected_hidden"];
+    head -> logits;
+  }
+}

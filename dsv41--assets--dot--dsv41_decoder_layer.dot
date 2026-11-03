@@ -1,0 +1,82 @@
+// @desc 一层 Decoder 的延迟 mHC。普通层把上一子层 post 折进本次 pre；仅 L1/L14 在入口单独 mhc_post、把 Engram 加进完整 hc 流，再 pre。本层结束不做独立 post，返回五元组。
+// @panel (2) 40 层结构与 Decoder 状态机 · M3 M4
+digraph dsv41_decoder {
+  graph [
+    rankdir=TB,
+    bgcolor="#f7f8fa",
+    pad=0.45,
+    nodesep=0.32,
+    ranksep=0.42,
+    splines=true,
+    fontname="Noto Sans CJK SC",
+    fontsize=16,
+    label="DecoderLayer · 延迟 mHC（M3 / M4）",
+    labelloc=t,
+    fontcolor="#1c2430"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Noto Sans CJK SC",
+    fontsize=12,
+    color="#8aa0b4",
+    fontcolor="#1c2430",
+    fillcolor="#ffffff",
+    margin="0.16,0.10"
+  ];
+  edge [
+    fontname="Noto Sans CJK SC",
+    fontsize=11,
+    color="#5c6b76",
+    fontcolor="#33404a",
+    arrowsize=0.7,
+    penwidth=1.1
+  ];
+
+  subgraph cluster_roles {
+    label="层角色（40 层 L0–L39，全局维）";
+    fontsize=13;
+    style="rounded,filled";
+    color="#c5d0da";
+    fillcolor="#eef3f8";
+    margin=12;
+    l0 [label="L0 首层\n无上一层 post\nembed 广播进 4 流\n仅 SWA", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    leg [label="L1 / L14 Engram\n入口单独 mhc_post\n再注入，再 pre\n注入在 Attention 前", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    lkv [label="kv-source\nL2 / L8 / L14 / L20\n持有 compressor\nL20–39 共享 L20 压缩 KV", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#f8f3e6", color="#a89062"];
+    laux [label="DSpark aux（配置决定）\n基线 0-based 36 / 37 / 38\nmhc_post 后 mean(dim=1)\n见面板 (6)", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+  }
+
+  subgraph cluster_sm {
+    label="DeepseekV4DecoderLayer.forward 状态机";
+    fontsize=13;
+    style="rounded,filled";
+    color="#c5d0da";
+    fillcolor="#f4faf8";
+    margin=12;
+
+    in5 [label="M4 · layer.forward(...)\nx / residual / post_mix /\nres_mix / pre_mix 分别传入\npost_mix [T,4,1]；res_mix [T,4,4]\npositions / input_ids 另传", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    first [label="首层 residual is None\nx.dim()==2\nhc_attn_fn_broadcast\n[T,5120]→[T,4,5120]", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+    ordinary [label="M3 · self.mhc_pre_delayed\npre_mix = 上层 ffn_pre\nsublayer_out=x\npost 折进本次 pre", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    egpost [label="M3 · self.mhc_post(x,residual,\npost_mix,res_mix)\n重建完整 residual [T,4,5120]\nEngram 层不把 post 折进 pre", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    egin [label="M10 · self.engram(residual,\nengram_hashes[:,layer_hash_index],\nengram_mask) → residual\n参数 hidden_states = residual", URL="../../README.md#51-engram在指定层入口补入-n-gram-信息m10", tooltip="M10：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    egpre [label="注入之后\nmhc_pre_delayed\npre_mix=传入值\n不再折叠本次 post", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    anorm [label="M4 · self.attn_norm(x)\nRMSNorm(5120)\nx [T,5120] → M5", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    attn [label="M5 · self.attn(positions,x,None)\nIluvatarDeepseekV41MultiHeadLatentAttentionWrapper\n.forward → 内部见 M5/M6/M7/M9 详图", URL="../../README.md#32-attention-怎样读历史并返回结果m5内部含-m7--m6--m9", tooltip="M5：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    fpre [label="M3 · self.mhc_pre_delayed\npre_mix=attn_pre\n折叠 attention post\n产出本层 ffn_pre", URL="../../README.md#31-mhc延迟状态机怎样接力四条残差流m3", tooltip="M3：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    fnorm [label="M4 · self.ffn_norm(x)\nRMSNorm(5120)\nx [T,5120] → M8", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    ffn [label="M8 · self.ffn(x,input_ids)\nDeepseekV4MoE.forward\n返回 x [T,5120]", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    out5 [label="M4 · return (x,residual,\npost_mix,res_mix,ffn_pre)\n主干接成 hidden_states / ... / pre_mix\n即层间 pre_mix = 本层 ffn_pre\n本层不做独立 post", URL="../../README.md#23-40层主干循环单层怎样靠五元组接力m4", tooltip="M4：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+  }
+
+  l0 -> first [style=dashed, color="#8aa0b4"];
+  leg -> egpost [style=dashed, color="#8aa0b4"];
+  lkv -> attn [style=dashed, color="#a89062"];
+  laux -> out5 [style=dashed, color="#8aa0b4"];
+  in5 -> first;
+  in5 -> ordinary;
+  in5 -> egpost;
+  first -> anorm;
+  ordinary -> anorm;
+  egpost -> egin -> egpre -> anorm;
+  anorm -> attn -> fpre -> fnorm -> ffn -> out5;
+}

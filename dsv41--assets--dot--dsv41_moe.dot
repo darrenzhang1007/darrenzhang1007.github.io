@@ -1,0 +1,90 @@
+// @desc 同一份 ffn_norm hidden 扇出到路由专家和 shared expert。384 选 top-6；routed_scaling_factor 1.5 只乘在路由权重上一次。shared 不经过 router，W8A8。SwiGLU clamp 为 10。
+// @panel (4) Router / routed / shared MoE · M8
+digraph dsv41_moe {
+  graph [
+    rankdir=TB,
+    bgcolor="#f7f8fa",
+    pad=0.45,
+    nodesep=0.30,
+    ranksep=0.40,
+    splines=true,
+    fontname="Noto Sans CJK SC",
+    fontsize=16,
+    label="MoE · 路由与 shared 并行（M8）",
+    labelloc=t,
+    fontcolor="#1c2430"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Noto Sans CJK SC",
+    fontsize=12,
+    color="#8aa0b4",
+    fontcolor="#1c2430",
+    fillcolor="#ffffff",
+    margin="0.15,0.10"
+  ];
+  edge [
+    fontname="Noto Sans CJK SC",
+    fontsize=11,
+    color="#5c6b76",
+    fontcolor="#33404a",
+    arrowsize=0.7,
+    penwidth=1.1
+  ];
+
+  h [label="M8 · layer.ffn: DeepseekV4MoE\nx = self.ffn(x,input_ids)\nx → hidden_states [T,5120]\n输入已过 layer.ffn_norm", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+
+  subgraph cluster_router {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#b7c9c3";
+    fillcolor="#f4faf8";
+    margin=12;
+    gate [label="M8 · self.gate\n[5120→384] 投影\nrouter_logits fp32", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    topk [label="topk_softplus_sqrt\nsqrtsoftplus + bias\ntop-6 再归一化\n权重 ×1.5 只此一次", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    bvl [label="gate.bias_vl\n仅图像 sentinel\n改专家选择\n不是 shared 的乘数", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", style="rounded,filled,dashed", fillcolor="#f3eef8", color="#8d79a8"];
+  }
+
+  subgraph cluster_routed {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#d2c6a6";
+    fillcolor="#fbf8f1";
+    margin=12;
+    qi8 [label="routed 激活量化\nper-token int8\n+ scale", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    sort [label="argsort_bincount_with_inv_pos\ntokens_per_experts\nsorted_indices, inv_pos", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    exp [label="expand_moe_input\n按 expert 展开\n[T×6, 5120]", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    g1 [label="M8 · self.experts：384 routed / top-6\nw4a8_group_gemm：w13 / gate_up\n[5120→2×2304] int4", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    cl [label="apply_moe_activation\nsilu_and_mul_with_clamp_packed\nclamp = 10\n再量化给 down", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+    g2 [label="w4a8_group_gemm\ndown_proj\n[2304→5120]\na3 [T×6,5120]", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e5f4f1", color="#5f9486"];
+  }
+
+  subgraph cluster_shared {
+    label="";
+    fontsize=13;
+    style="rounded,filled";
+    color="#c9bdd8";
+    fillcolor="#f7f4fa";
+    margin=12;
+    sg [label="M8 · self.shared_experts\nDeepseekV4MLP：gate_up_proj的w1半边\n[5120→2304] W8A8，不经router", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    su [label="M8 · self.shared_experts\nDeepseekV4MLP：gate_up_proj的w3半边\n[5120→2304] W8A8，不经router", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    sa [label="SiluAndMulWithClamp\nswiglu_limit=10\n或 silu_and_mul_with_clamp_quant", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+    sd [label="shared down_proj\n[2304→5120] W8A8", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#f3eef8", color="#8d79a8"];
+  }
+
+  agg [label="moe_sum\n已缩放的 routed 权重\n+ shared\n不再乘 1.5", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#e7f0fa", color="#6d8eae"];
+  out [label="M8 · return hidden_states\n层内接回 x [T,5120]\n只返回专家聚合结果\nresidual / mix 仍由 M3/M4 保管", URL="../../README.md#33-moe-怎样汇合两路专家并把状态交给下一层m8", tooltip="M8：正文段落含代码对象、调用点与变量对应", fillcolor="#f8eee8", color="#b08978"];
+
+  h -> gate -> topk;
+  h -> bvl [style=dashed];
+  bvl -> topk [style=dashed];
+  topk -> qi8 -> sort -> exp -> g1 -> cl -> g2 -> agg;
+  h -> sg [label="不经 gate"];
+  h -> su;
+  sg -> sa;
+  su -> sa -> sd -> agg;
+  agg -> out;
+}
