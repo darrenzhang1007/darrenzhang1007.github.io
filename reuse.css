@@ -1,0 +1,4 @@
+.article-reuse{margin:36px 0 28px;padding:22px 24px;border:1px solid var(--line,#e5e7eb);border-left:3px solid var(--green,#159570);border-radius:8px;background:var(--soft,#fafbf9);font-size:14px;line-height:1.8;color:var(--muted,#707a75)}
+.article-reuse h2{margin:0 0 10px;font-size:15px;font-weight:600;color:var(--ink,#202a25)}
+.article-reuse p{margin:5px 0}.article-reuse a{color:var(--green,#159570);overflow-wrap:anywhere;text-decoration:underline;text-underline-offset:3px}.article-reuse .reuse-hint{font-size:13px;margin-top:10px}
+@media(max-width:600px){.article-reuse{padding:18px;margin-top:28px}}

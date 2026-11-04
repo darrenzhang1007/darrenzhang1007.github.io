@@ -1,18 +1,19 @@
-import {createViews,esc,icon} from './views.js?v=3258845ae6d9';
-import {noteUrl,readRoute,legacyTarget,readingParameters} from './routes.js?v=1a09ce4ae068';
+import {createViews,esc,icon} from './views.js?v=2e97710c20a3';
+import {noteUrl,readRoute,legacyTarget,readingParameters} from './routes.js?v=88b7b51ed58a';
+import {setupCopyPolicy} from './copy-policy.js?v=653f7f00b5dd';
 import {enhanceCodeBlocks} from './code-blocks.js?v=8a0f149633ed';
 import {normalizeText,queryTerms,highlightText,buildSearchIndex,searchPassages,annotateSearchBlocks,revealSearchLocation,clearSearchLocation} from './search.js?v=6f5516645b73';
 const directoryStyle=document.createElement('link');directoryStyle.rel='stylesheet';directoryStyle.href='/directory.css?v=47fa461e633d';if(!document.querySelector('link[data-reader-directory]'))document.head.appendChild(directoryStyle);
 const codeStyle=document.createElement('link');codeStyle.rel='stylesheet';codeStyle.href='/code.css?v=059cce3dda81';if(!document.querySelector('link[data-reader-code]'))document.head.appendChild(codeStyle);
 const main=document.querySelector('main'),dialog=document.querySelector('#search-dialog'),input=document.querySelector('#search-input'),results=document.querySelector('#search-results');
-let content,views,notes=[],books=[],searchMatches=[],selected=0,searchScope=null,searchDocuments=null,searchQuery='',searchTimer,toastTimer,cleanupReading=()=>{},cleanupCode=()=>{};
+let content,views,notes=[],books=[],searchMatches=[],selected=0,searchScope=null,searchDocuments=null,searchQuery='',searchTimer,toastTimer,cleanupReading=()=>{},cleanupCode=()=>{},cleanupCopy=()=>{};
 const ordered=items=>[...items].sort((a,b)=>(Date.parse(b.updated_at)||0)-(Date.parse(a.updated_at)||0)||a.id.localeCompare(b.id));
 const bookFor=n=>books.find(b=>b.id===n.book_id);
 function toast(text){const el=document.querySelector('#toast');clearTimeout(toastTimer);el.textContent=text;el.classList.add('visible');toastTimer=setTimeout(()=>el.classList.remove('visible'),2500);}
 function toggleSidebar(open){document.querySelector('#book-sidebar')?.classList.toggle('open',open);document.querySelector('#sidebar-mask')?.classList.toggle('open',open);document.querySelector('#toggle-directory')?.setAttribute('aria-expanded',String(open));document.body.classList.toggle('directory-open',open);}
 function render(){if((location.pathname==='/'||location.pathname==='/index.html')&&location.hash){const target=legacyTarget(location.hash,notes,books);if(target){location.replace(target);return;}}
  const {page,id}=readRoute(location.pathname);let html,title,isReader=false;
- cleanupReading();cleanupReading=()=>{};cleanupCode();cleanupCode=()=>{};document.querySelector('#image-preview')?.close();
+ cleanupReading();cleanupReading=()=>{};cleanupCode();cleanupCode=()=>{};cleanupCopy();cleanupCopy=()=>{};document.querySelector('#image-preview')?.close();
  if(page==='home'){html=views.home();title='知识库';}
  else if(page==='articles'){html=views.articlesPage(new URLSearchParams(location.search).get('book')||'');title='全部文章';}
  else if(page==='thoughts'){html=views.bookmarks();title='阅读收藏';}
@@ -26,7 +27,7 @@ function render(){if((location.pathname==='/'||location.pathname==='/index.html'
   const prose=main.querySelector('.prose');if(prose)annotateSearchBlocks(prose);if(prose&&window.renderMathInElement)window.renderMathInElement(prose,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false,strict:'ignore',trust:false});
   if(prose)cleanupCode=enhanceCodeBlocks(prose,{notify:toast});
   const searchParams=readingParameters(location);
-  const readingNote=page==='note'?notes.find(n=>n.id===id):null;if(readingNote)cleanupReading=setupReading(readingNote);
+  const readingNote=page==='note'?notes.find(n=>n.id===id):null;if(readingNote){cleanupReading=setupReading(readingNote);if(prose)cleanupCopy=setupCopyPolicy(prose,{url:new URL(noteUrl(readingNote),'https://darrenzhang1007.github.io').href,notify:toast});}
   if(prose)revealSearchLocation(prose,searchParams);
   main.querySelectorAll('.prose .diagram-link').forEach(link=>link.addEventListener('click',event=>{if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();openImagePreview(link);}));
 }
