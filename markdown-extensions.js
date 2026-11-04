@@ -39,7 +39,7 @@ export function enhanceMarkdown(root,{eager=false}={}){
  const check=()=>graphs.forEach(graph=>render(graph));for(const graph of graphs){observer?.observe(graph.figure);if(eager||!observer)render(graph);}
  root.addEventListener('toggle',check,true);
  const themeObserver=win?.MutationObserver?new win.MutationObserver(check):null;themeObserver?.observe(doc.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
- function footnote(event){const link=event.target.closest?.('a[href^="#fn"]');if(!link||!root.contains(link)||!link.closest('.footnote-ref,.footnotes'))return;const target=doc.getElementById(decodeURIComponent(link.getAttribute('href').slice(1)));if(!target)return;event.preventDefault();target.scrollIntoView({block:'center',behavior:'instant'});target.setAttribute('tabindex','-1');target.focus({preventScroll:true});}
+ function footnote(event){const link=event.target.closest?.('a[href^="#"]');if(!link||!root.contains(link)||doc===document&&!link.closest('.footnote-ref,.footnotes'))return;let id=link.getAttribute('href').slice(1);try{id=decodeURIComponent(id);}catch{}const target=doc.getElementById(id);if(!target)return;event.preventDefault();target.scrollIntoView({block:'center',behavior:'instant'});target.setAttribute('tabindex','-1');target.focus({preventScroll:true});}
  root.addEventListener('click',footnote);
  return()=>{disposed=true;observer?.disconnect();themeObserver?.disconnect();root.removeEventListener('toggle',check,true);root.removeEventListener('click',footnote);};
 }

@@ -6,3 +6,6 @@
 [data-theme=dark] .prose .mermaid-figure{background:#19232c;border-color:#34444f}[data-theme=dark] .prose .mermaid-source>summary{border-color:#34444f}
 @media(max-width:600px){.prose .mermaid-canvas{padding:16px 8px;max-height:560px}}
 @media print{.prose .mermaid-canvas{max-height:none;overflow:visible}.prose .mermaid-source{display:none}}
+
+.prose .heading-alias{display:block;height:0;scroll-margin-top:110px}
+.prose .katex-display{max-width:100%;overflow-x:auto!important;overflow-y:hidden!important;padding:.15em 0}.prose .katex-display>.katex{display:block;width:max-content;min-width:100%}

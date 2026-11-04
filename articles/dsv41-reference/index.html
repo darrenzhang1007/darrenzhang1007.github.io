@@ -18,9 +18,9 @@
   <script defer src="/vendor--auto-render.min.js"></script>
   <link rel="stylesheet" href="/directory.css?v=47fa461e633d" data-reader-directory>
   <link rel="stylesheet" href="/code.css?v=059cce3dda81" data-reader-code>
-  <link rel="stylesheet" href="/markdown-extensions.css?v=18d3182d2ef7">
+  <link rel="stylesheet" href="/markdown-extensions.css?v=fff3a5effa63">
   <link rel="stylesheet" href="/reuse.css?v=fbfcaa0d7de1">
-  <script type="module" src="/app.js?v=16689d524fa4"></script>
+  <script type="module" src="/app.js?v=ee8de653e9d4"></script>
 
   <meta name="robots" content="index, follow, max-image-preview:large">
   <link rel="canonical" href="https://darrenzhang1007.github.io/articles/dsv41-reference/">
@@ -583,7 +583,7 @@ compressor.fused_wkv_wgate ←（compressor.wkv | compressor.wgate）
 <hr />
 <h2 id="第-5-章注意力三档压缩跨层共享与两级候选">第 5 章：注意力：三档压缩、跨层共享与两级候选</h2>
 <p><code>DeepseekV4Attention</code>（<code>attention.py:161</code>）是平台无关基类，抽象方法 <code>forward_mqa</code> / <code>get_padded_num_q_heads</code> / <code>_o_proj</code>；CUDA 侧两个子类：<code>DeepseekV4FlashMLAAttention</code>（<code>nvidia/flashmla.py:49</code>）与 <code>DeepseekV4FlashInferMLAAttention</code> / <code>DeepseekV4FlashInferSM120Attention</code>（<code>nvidia/flashinfer_sparse.py</code>）。选择逻辑在 <code>_select_dsv4_attn_cls</code>（<code>model.py:117-152</code>）：显式 <code>FLASHMLA_SPARSE_DSV41</code> / <code>FLASHINFER_MLA_SPARSE_DSV41</code> 优先；缺省时 SM12 走 FlashInfer、其余走 FlashMLA；V3.2 的 <code>FLASHINFER_MLA_SPARSE(_SM120)</code> 被显式拒绝（<code>:126-135</code>）。</p>
-<h3 id="51-mla-形状两段低秩-分组输出">5.1 MLA 形状：两段低秩 + 分组输出</h3>
+<span class="heading-alias" id="51-mla-形状两段低秩--分组输出" aria-hidden="true"></span><h3 id="51-mla-形状两段低秩-分组输出">5.1 MLA 形状：两段低秩 + 分组输出</h3>
 <pre><code class="language-text">Q 路：hidden 5120
   → fused_wqa_wkv（MergedColumnParallelLinear [1280 | 512]，disable_tp，attention.py:316-323）
      ├─ q_lora 1280 → q_norm RMSNorm(1280)（:324）
@@ -820,7 +820,7 @@ output = hidden + gate * value
 <li>权重：<code>topk=6</code>、<code>renormalize=norm_topk_prob=true</code>、<code>routed_scaling_factor=1.5</code>，一起进 <code>fused_topk_bias</code>（<code>:1034-1048</code>）。</li>
 <li>shared expert：1 个，宽度 <code>moe_intermediate_size × n_shared_experts = 2304</code>，<code>swiglu_limit=10.0</code> 经 <code>SiluAndMulWithClamp</code> 生效。</li>
 </ul>
-<h3 id="量化mxfp8-线性-mxfp4-专家">量化：MXFP8 线性 + MXFP4 专家</h3>
+<span class="heading-alias" id="量化mxfp8-线性--mxfp4-专家" aria-hidden="true"></span><h3 id="量化mxfp8-线性-mxfp4-专家">量化：MXFP8 线性 + MXFP4 专家</h3>
 <p>这是 V4.1 和 V4.0 的一处实质差异。<code>quantization_config</code> 是 <code>weight_block_size=[32, 32]</code> + <code>scale_fmt="ue8m0"</code> + <code>expert_dtype="fp4"</code>。</p>
 <p><code>DeepseekV4FP8Config</code>（<code>quant_config.py:33</code>）按 <code>expert_dtype</code> 分派，且 <code>is_scale_e8m0 = (expert_dtype == "fp4")</code>（<code>:85-88</code>）。当 <code>weight_block_size == [32, 32]</code> 且 <code>is_scale_e8m0</code> 时（<code>:189-190</code>），线性层拿到 <code>QuantSpec(weight=kMxfp8Static, activation=kMxfp8Dynamic)</code>（<code>:204-206</code>）——也就是 <strong>MXFP8</strong>，而不是 V4.0 那套 <code>[128,128]</code> block-FP8。</p>
 <p>这个分派还决定 scale 参数叫什么名字。<code>_linear_scale_param_name</code>（<code>model.py:955-966</code>）：MXFP8（<code>[32,32]</code> + fp4 experts）走 <code>ModelOptLinearMethod</code>，注册 <code>weight_scale</code>；block-FP8 注册 <code>weight_scale_inv</code>。weights mapper 的 <code>.scale</code> 重写规则跟着它走（<code>model.py:969-1000</code>）。专家侧 MXFP4 用 <code>Mxfp4MoEMethod</code>，scale 注册成 <code>w{1,2,3}_weight_scale</code>（无 <code>_inv</code>）。</p>
@@ -851,7 +851,7 @@ output = hidden + gate * value
 <p>和 V4.0 的 DSpark 对照：层数同为 3，但 V4.1 的 draft 层<strong>自带 128/top-3 的 MoE</strong>（V4.0 的 draft 层用主干的 256/top-6），Markov 头在 checkpoint 里的名字从 <code>markov_w1/w2</code> 变成 <code>embed</code>/<code>head</code>（<code>:538-547</code> 做了映射），而且 V4.1 没有 MTP 可以二选一。</p>
 <hr />
 <h2 id="第-9-章prefilldecode-与-kernel-速查">第 9 章：Prefill/Decode 与 kernel 速查</h2>
-<h3 id="91-组件-kernel-总表">9.1 组件 → kernel 总表</h3>
+<span class="heading-alias" id="91-组件--kernel-总表" aria-hidden="true"></span><h3 id="91-组件-kernel-总表">9.1 组件 → kernel 总表</h3>
 <div class="table-scroll"><table>
 <thead>
 <tr>
