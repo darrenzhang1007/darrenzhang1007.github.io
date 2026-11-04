@@ -13,7 +13,11 @@ export function enhanceMarkdown(root,{eager=false}={}){
   pre.before(figure);figure.append(canvas,details);details.append(pre);
   const graph={figure,canvas,details,source:code.textContent,state:'idle',theme:'',generation:0};graphs.push(graph);
  }
- function visible(graph){return eager||graph.figure.getClientRects().length&&graph.figure.getBoundingClientRect().width>0;}
+ function visible(graph){
+  if(eager)return true;
+  for(let parent=graph.figure.parentElement;parent&&parent!==root;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open)return false;
+  const rect=graph.figure.getBoundingClientRect();return rect.width>0&&rect.bottom>=-500&&rect.top<=(win?.innerHeight||900)+500;
+ }
  function render(graph,force=false){
   const theme=dark()?'dark':'default';if(disposed||!visible(graph)||graph.state==='loading'||(!force&&graph.state==='error')||(graph.state==='ready'&&graph.theme===theme))return;
   graph.state='loading';const generation=++graph.generation;graph.canvas.setAttribute('aria-busy','true');

@@ -1,4 +1,4 @@
-import {enhanceMarkdown} from './markdown-extensions.js?v=2c9e9d7425e1';
+import {enhanceMarkdown} from './markdown-extensions.js?v=a9d241313e67';
 import {createViews,esc,icon} from './views.js?v=2e97710c20a3';
 import {noteUrl,readRoute,legacyTarget,readingParameters} from './routes.js?v=88b7b51ed58a';
 import {setupCopyPolicy} from './copy-policy.js?v=653f7f00b5dd';
