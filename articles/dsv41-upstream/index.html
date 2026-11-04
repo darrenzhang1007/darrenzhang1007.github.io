@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="沿上游官方实现的阅读口径，理解模型、量化、注意力与后端调用。">
+  <title>上游 vLLM 实现（NVIDIA） · DarrenZhang</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/theme.js?v=fbee3d9f1352"></script>
+  <link rel="stylesheet" href="/vendor--site-font.css?v=b0946ebef50d">
+  <link rel="stylesheet" href="/style.css?v=5cd1cd8771cb">
+  <link rel="stylesheet" href="/typography.css?v=a72487c06eb6">
+  <link rel="stylesheet" href="/vendor--katex.local.css">
+  <link rel="stylesheet" href="/theme.css?v=256cddc575d0">
+  <script defer src="/vendor--katex.min.js"></script>
+  <script defer src="/vendor--auto-render.min.js"></script>
+  <link rel="stylesheet" href="/directory.css?v=47fa461e633d" data-reader-directory>
+  <link rel="stylesheet" href="/code.css?v=059cce3dda81" data-reader-code>
+  <script type="module" src="/app.js?v=033a80e631fe"></script>
+
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://darrenzhang1007.github.io/articles/dsv41-upstream/">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="DarrenZhang · 知识库">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="上游 vLLM 实现（NVIDIA）">
+  <meta property="og:description" content="沿上游官方实现的阅读口径，理解模型、量化、注意力与后端调用。">
+  <meta property="og:url" content="https://darrenzhang1007.github.io/articles/dsv41-upstream/">
+  <meta property="og:image" content="https://darrenzhang1007.github.io/share-default.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="DarrenZhang 的个人技术知识库">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="上游 vLLM 实现（NVIDIA）">
+  <meta name="twitter:description" content="沿上游官方实现的阅读口径，理解模型、量化、注意力与后端调用。">
+  <meta name="twitter:image" content="https://darrenzhang1007.github.io/share-default.png">
+  <meta property="article:modified_time" content="2026-11-01T14:19:28.041Z">
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"Article","@id":"https://darrenzhang1007.github.io/articles/dsv41-upstream/","url":"https://darrenzhang1007.github.io/articles/dsv41-upstream/","name":"上游 vLLM 实现（NVIDIA）","headline":"上游 vLLM 实现（NVIDIA）","author":{"@type":"Person","name":"DarrenZhang","url":"https://darrenzhang1007.github.io/"},"dateModified":"2026-11-01T14:19:28.041Z","mainEntityOfPage":"https://darrenzhang1007.github.io/articles/dsv41-upstream/","articleSection":"DeepSeek-V4.1-Flash","image":["https://darrenzhang1007.github.io/share-default.png"],"description":"沿上游官方实现的阅读口径，理解模型、量化、注意力与后端调用。","inLanguage":"zh-CN"},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"主页","item":"https://darrenzhang1007.github.io/"},{"@type":"ListItem","position":2,"name":"DeepSeek-V4.1-Flash","item":"https://darrenzhang1007.github.io/books/dsv41-flash/"},{"@type":"ListItem","position":3,"name":"上游 vLLM 实现（NVIDIA）","item":"https://darrenzhang1007.github.io/articles/dsv41-upstream/"}]}]</script>
+</head>
+<body class="reader-view">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="DarrenZhang 首页"><span class="brand-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg></span>DarrenZhang<span class="brand-divider">/</span><span class="brand-label">知识库</span></a>
+      <nav aria-label="主导航"><a href="/" data-nav="home">主页</a><a href="/articles/" data-nav="articles" class="active" aria-current="page">全部文章</a></nav>
+      <div class="header-actions">
+        <a class="manage-link" href="https://darrenzhang-notebook.blue-koala-1430.chatgpt.site" target="_blank" rel="noopener" aria-label="管理网站"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 7 9 7 9s7-5 7-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>管理</span></a>
+        <button class="search-trigger" aria-label="搜索文章"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span>搜索文章、知识库</span><kbd>Ctrl K</kbd></button>
+        <div class="theme-switcher">
+          <button id="theme-toggle" class="theme-toggle" aria-label="显示主题" aria-controls="theme-panel" aria-expanded="false" title="显示主题">
+            <svg class="theme-symbol" data-theme-symbol="system" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <svg class="theme-symbol" data-theme-symbol="light" viewBox="0 0 24 24" aria-hidden="true" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg>
+            <svg class="theme-symbol" data-theme-symbol="dark" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M20.5 14A8.7 8.7 0 0 1 10 3.5 8.7 8.7 0 1 0 20.5 14Z"/></svg>
+          </button>
+          <div id="theme-panel" class="theme-panel" role="group" aria-label="显示主题" hidden>
+            <p>显示主题</p>
+            <button type="button" data-theme-option="system" aria-pressed="true"><span>跟随系统</span><span class="theme-check" aria-hidden="true">✓</span></button>
+            <button type="button" data-theme-option="light" aria-pressed="false"><span>日间</span><span class="theme-check" aria-hidden="true">✓</span></button>
+            <button type="button" data-theme-option="dark" aria-pressed="false"><span>夜间</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"><div class="reader-toolbar"><button id="toggle-directory" aria-controls="book-sidebar" aria-expanded="false"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg> 知识库</button><a href="/books/dsv41-flash/">DeepSeek-V4.1-Flash</a><button id="toggle-outline" aria-controls="outline-dialog" aria-expanded="false">本文大纲 <span class="reading-percent">0%</span></button></div><button class="sidebar-mask" id="sidebar-mask" aria-label="关闭目录"></button><div class="reader-shell has-toc"><aside class="book-sidebar" id="book-sidebar"><a class="sidebar-back" href="/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7m-16-2v13h14V8M9 21v-8h6v8"/></svg> 返回主页</a><a class="sidebar-book" href="/books/dsv41-flash/"><span class="small-book"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg></span><strong>DeepSeek-V4.1-Flash</strong></a><button class="sidebar-search" data-book-search="dsv41-flash"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>搜索当前知识库</span><kbd>/</kbd></button><a class="sidebar-overview " href="/books/dsv41-flash/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7m-16-2v13h14V8M9 21v-8h6v8"/></svg> 知识库首页</a><div class="sidebar-section-label">目录 <span>7</span></div><nav aria-label="知识库目录"><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>阅读入口</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-index/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>专题索引与阅读导航</span></a></div></details><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>核心文档</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-architecture/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>DeepSeek-V4.1-Flash：从模型结构到一次推理</span></a><a class="tree-note active" aria-current="page" href="/articles/dsv41-upstream/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游 vLLM 实现（NVIDIA）</span></a><a class="tree-note "  href="/articles/dsv41-deployment/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>DeepSeek-V4.1-Flash 部署指南</span></a></div></details><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>图表与参考</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-diagrams/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>架构图集与算子映射</span></a><a class="tree-note "  href="/articles/dsv41-reference/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游实现学习讲义</span></a><a class="tree-note "  href="/articles/dsv41-review/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游讲义核验与评审</span></a></div></details></nav><div class="sidebar-bottom"><span>只展示已选入的文章</span><a href="/articles/">全部文章 <svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside><div class="reader-content"><article class="article"><div class="breadcrumbs"><a href="/books/dsv41-flash/">DeepSeek-V4.1-Flash</a><span>/</span><span>文档</span></div><header class="article-head"><h1>上游 vLLM 实现（NVIDIA）</h1><div class="document-meta"><span>DarrenZhang</span><time datetime="2026-11-01T14:19:28.041708+00:00">更新于 2026-11-01</time><span>约 106 分钟阅读</span></div><p class="article-description">沿上游官方实现的阅读口径，理解模型、量化、注意力与后端调用。</p><div class="article-actions"><button id="copy-link"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 15 6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2M7 11l-2 2a5 5 0 0 0 7 7l2-2"/></svg> 复制链接</button><a download="上游 vLLM 实现（NVIDIA）.md" href="/notes--dsv41-upstream.md">下载 Markdown</a></div></header><div class="prose"><span id="deepseek-v41-flash上游-vllmnvidia实现"></span>
+<p>本文介绍 DeepSeek-V4.1-Flash 在<strong>上游官方 vLLM <code>v0.32.0</code>（NVIDIA 路径）</strong>上的实现。</p>
+<p><strong>本文结构（自顶向下）</strong>：第 0 章模型架构概览 → 第 1 章基于 <code>config.json</code> 梳理 40 层配置 → 第 2 章从上层走通一次完整 <code>forward</code>（各子模块先视作黑盒）→ 第 3 章展开 mHC / Attention / MoE / Engram / DSpark 模块内部实现 → 第 4、5 章介绍量化与算子（kernel）分派 → 第 6 章提供文件与符号速查表。定位算子位置，可直接查看 <a href="/articles/dsv41-upstream/#61-%E6%A8%A1%E5%9D%97--%E6%96%87%E4%BB%B6">6.1 节</a> 和 <a href="/articles/dsv41-upstream/#51-%E7%BB%84%E4%BB%B6--kernel-%E6%80%BB%E8%A1%A8">5.1 节</a>。</p>
+<h2 id="基线">基线</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>源码基线</td>
+<td>官方 <code>vllm-project/vllm</code>，<strong><code>v0.32.0</code></strong>，commit <code>5df63a7203</code>（2026-10-17，分支 <code>releases/v0.32.0</code>）</td>
+</tr>
+<tr>
+<td>模型配置</td>
+<td>官方 checkpoint <a href="https://www.modelscope.cn/models/deepseek-ai/DeepSeek-V4.1-Flash/file/view/master/config.json"><code>deepseek-ai/DeepSeek-V4.1-Flash</code> 的 <code>config.json</code></a></td>
+</tr>
+</tbody>
+</table></div>
+<p>本文中 <code>文件:行号</code> 的路径一律相对 <code>vllm/</code>，例如 <code>models/deepseek_v41/attention.py:659</code> 指的是 <code>vllm/models/deepseek_v41/attention.py</code> 第 659 行。第 2、3 章的走查正文为了简洁，在上下文已经点明文件后会只写 <code>attention.py:659</code> 这样的短形式。</p>
+<hr>
+<h2 id="0-架构概览">0. 架构概览</h2>
+<p>DeepSeek-V4.1-Flash 是一个 <strong>40 层全 MoE 模型</strong>（无稠密 FFN 层，<code>hidden_size=5120</code>），核心由以下 7 个部分组成（具体层号、配置参数与代码实现见第 1～3 章）：</p>
+<ul>
+<li><strong>MLA（多头潜在注意力，压缩通道维）</strong>：普通 Transformer 每个注意力头各自保存一份 K 和 V；MLA 将所有头的 KV 压缩为一个共享的 <strong>512 维潜在向量（latent）</strong>，由 64 个 Query 头共享同一份 KV（细节见 <a href="/articles/dsv41-upstream/#325-mla-%E7%9A%84%E5%BD%A2%E7%8A%B6%E4%B8%A4%E6%AE%B5%E4%BD%8E%E7%A7%A9--%E5%88%86%E7%BB%84%E8%BE%93%E5%87%BA">3.2.5 节</a>）。</li>
+<li><strong>Sparse MLA（SWA + Compressor + Indexer，减少序列长度维的计算量）</strong>：仅靠 MLA 时，长上下文仍需遍历全部历史 KV；Sparse MLA 同时维护<strong>近处滑窗缓存（SWA，保留最近 128 个 token）</strong>与<strong>压缩缓存（<code>Compressor</code> 实时压缩全量历史，<code>Indexer</code> 打分检索出最相关的 512 条记录）</strong>，使注意力每次最多只读 <code>128 + 512 = 640</code> 条记录（细节见 <a href="/articles/dsv41-upstream/#321-%E5%8F%8C%E8%BD%A8%E7%BC%93%E5%AD%98%E4%B8%8E-compress_ratios-%E7%9A%84%E4%B8%89%E6%A1%A3%E8%AF%AD%E4%B9%89">3.2.1 节</a>）。</li>
+<li><strong>跨层共享与两级候选（<code>source</code> 层复用）</strong>：L2–L39 共 38 层全部执行上述 Sparse MLA，但只有少数 <code>source</code> 层真正挂载 <code>Compressor</code>（4 层）和 <code>Indexer</code>（8 层）去刷新压缩缓存与 top-512 索引，其余层直接复用前序层的计算结果；L20 还额外输出粗筛候选块供后续层做二级检索（细节见 <a href="/articles/dsv41-upstream/#322-%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E8%B0%81%E7%9C%9F%E7%9A%84%E6%8C%81%E6%9C%89%E6%A8%A1%E5%9D%97%E4%B8%89%E5%BC%A0-source-%E5%B1%82%E8%A1%A8">3.2.2 节</a> 与 <a href="/articles/dsv41-upstream/#323-%E4%B8%A4%E7%BA%A7%E5%80%99%E9%80%89%E5%9C%A8-nv-%E8%B7%AF%E5%BE%84%E6%80%8E%E4%B9%88%E8%90%BD%E5%9C%B0">3.2.3 节</a>）。</li>
+<li><strong>四流超连接残差（4 流 mHC + 延迟融合）</strong>：将普通 Transformer 的单条残差流扩展为 <strong>4 条并行残差流 <code>[T, 4, 5120]</code></strong>，在进出子层（Attention / MoE）时做「4 流 ↔ 1 流」加权转换（<code>pre</code> 与 <code>post</code>），并通过算子融合将上一子层的 <code>post</code> 推迟到下一子层的 <code>pre</code> 一并执行以减少显存读写（细节见 <a href="/articles/dsv41-upstream/#22-%E4%B8%BB%E5%B9%B2%E5%BE%AA%E7%8E%AF%E6%AF%8F%E5%B1%82%E4%BA%A4%E8%BF%98%E4%B8%80%E4%B8%AA%E5%85%AD%E5%85%83%E7%BB%84">2.2 节</a> 与 <a href="/articles/dsv41-upstream/#31-mhc%E4%BB%8E%E4%B8%8A%E5%B1%82%E5%85%A5%E5%8F%A3%E5%88%B0-kernel-%E7%9A%84%E8%B0%83%E7%94%A8%E9%93%BE%E4%B8%8E%E5%86%85%E9%83%A8%E8%AE%A1%E7%AE%97">3.1 节</a>）。</li>
+<li><strong>MoE（混合专家）</strong>：全 40 层均为 MoE（每层 <strong>384 个路由专家选 top-6 + 1 个共享专家</strong>），统一通过门控打分加偏置选专家（<code>noaux_tc</code>），取消了 V4.0 前 3 层的词表哈希路由（细节见 <a href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft">3.3 节</a>）。</li>
+<li><strong>Engram（N-gram 哈希记忆查表，解耦记忆与计算）</strong>：用超大规模的 2/3/4-gram 词组哈希嵌入表（可直接卸载到主机 CPU 内存，按址 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span> 查表）直接为残差流补充局部词组搭配与静态知识，替代了 V4.0 前 3 层的单 token 哈希 MoE，节省早期层的 Attention 与 FFN 算力（细节见 <a href="/articles/dsv41-upstream/#34-engramn-gram-%E5%93%88%E5%B8%8C%E6%9F%A5%E8%A1%A8%E4%B8%8E%E9%97%A8%E6%8E%A7%E6%B3%A8%E5%85%A5">3.4 节</a>）。</li>
+<li><strong>DSpark（半自回归投机解码草稿模型）</strong>：挂载在主干之后的 3 层独立轻量草稿模型，融合主干末三层的隐状态后单步并行预测 5 个草稿 token（<code>block_size=5</code>）交回主干验证，替代了逐 token 串行递推的经典 MTP（细节见 <a href="/articles/dsv41-upstream/#35-dspark3-%E5%B1%82%E5%8D%8A%E8%87%AA%E5%9B%9E%E5%BD%92%E6%8A%95%E6%9C%BA%E8%8D%89%E7%A8%BF%E6%A8%A1%E5%9E%8B">3.5 节</a>）。</li>
+</ul>
+<p>和 V4 标准版的关键差异，这几条最容易讲错：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>V4 标准版</th>
+<th><strong>V4.1-Flash</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>层数 / hidden</td>
+<td>43 / 4096</td>
+<td><strong>40 / 5120</strong></td>
+</tr>
+<tr>
+<td>专家规模</td>
+<td>256 / top-6</td>
+<td><strong>384 / top-6</strong></td>
+</tr>
+<tr>
+<td>MoE 路由</td>
+<td>前 3 层 <code>tid2eid</code> 哈希 + 40 层 <code>noaux_tc</code></td>
+<td><strong>全 40 层 <code>noaux_tc</code></strong></td>
+</tr>
+<tr>
+<td>投机解码</td>
+<td>经典 MTP</td>
+<td><strong>DSpark</strong>（不通用）</td>
+</tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="1-先建立模型轮廓config-怎么决定-40-层">1. 先建立模型轮廓：config 怎么决定 40 层</h2>
+<h3 id="11-config-怎样被读进来">1.1 config 怎样被读进来</h3>
+<p>字段都在 <code>text_config</code> 下，但 <code>DeepseekV41Config.__init__</code> <strong>把 <code>text_config</code> 的字段全部摊平到顶层</strong>，所以模型代码里是 <code>config.hidden_size</code> 直读。同一处还把 <code>rope_scaling</code> 改名成 <code>rope_parameters</code>（Transformers v5 里 <code>rope_scaling</code> 变成了属性），并把 <code>quantization_config.expert_dtype</code> 提到顶层。</p>
+<p><code>num_hash_layers</code> 不在 <code>config.json</code> 里，由 <code>nvidia/model.py</code> 构建 MoE 时硬编码为 <code>0</code>——这就是「全 40 层 <code>noaux_tc</code>」的源码依据（落点见 <a href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft">3.3 节</a>）。</p>
+<h3 id="12-关键字段">1.2 关键字段</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hidden_size</code></td>
+<td>5120</td>
+<td>单流宽度；mHC 四流总宽是 <code>4 × 5120 = 20480</code>，但张量始终保持 3 维 <code>[T,4,5120]</code>，<strong>不展平</strong></td>
+</tr>
+<tr>
+<td><code>num_attention_heads</code> / <code>head_dim</code></td>
+<td>64 / 512</td>
+<td>MLA 的 Q 头数与每头宽度（512 = 448 维内容 NoPE + 64 维位置 RoPE）</td>
+</tr>
+<tr>
+<td><code>num_key_value_heads</code></td>
+<td>1</td>
+<td>KV 压成单头 latent，由 64 个 Q 头共享</td>
+</tr>
+<tr>
+<td><code>q_lora_rank</code> / <code>o_lora_rank</code> / <code>o_groups</code></td>
+<td>1280 / 1024 / 8</td>
+<td>Q 投影与输出 O 投影都做两段低秩分解（先压到低维再升回高维，省参数和算力），其中 O 投影分 8 组做</td>
+</tr>
+<tr>
+<td><code>qk_rope_head_dim</code></td>
+<td>64</td>
+<td>带旋转位置编码（RoPE）的维度；其余 448 维不加位置编码（NoPE）</td>
+</tr>
+<tr>
+<td><code>sliding_window</code></td>
+<td>128</td>
+<td>近处滑窗（SWA）大小：最近 128 个 token 永远原样保留</td>
+</tr>
+<tr>
+<td><code>compress_ratios</code></td>
+<td>43 项（<code>0</code>×2, <code>2</code>×18, <code>1</code>×20, 末尾 <code>0</code>×3）</td>
+<td>每层压缩档位：主干 L0–L1 为 <code>0</code>（纯滑窗）、L2–L19 为 <code>2</code>（2:1 压缩）、L20–L39 为 <code>1</code>（1:1 压缩），末尾 3 个 <code>0</code> 对应 DSpark draft（详见 <a href="/articles/dsv41-upstream/#321-%E5%8F%8C%E8%BD%A8%E7%BC%93%E5%AD%98%E4%B8%8E-compress_ratios-%E7%9A%84%E4%B8%89%E6%A1%A3%E8%AF%AD%E4%B9%89">3.2.1 节</a>）</td>
+</tr>
+<tr>
+<td><code>kv_source_layer_ids</code></td>
+<td><code>[2, 8, 14, 20]</code></td>
+<td>真正实例化 <code>Compressor</code> 并写入压缩 KV cache 的 4 个 <code>source</code> 层，其余层复用（详见 <a href="/articles/dsv41-upstream/#322-%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E8%B0%81%E7%9C%9F%E7%9A%84%E6%8C%81%E6%9C%89%E6%A8%A1%E5%9D%97%E4%B8%89%E5%BC%A0-source-%E5%B1%82%E8%A1%A8">3.2.2 节</a>）</td>
+</tr>
+<tr>
+<td><code>index_source_layer_ids</code></td>
+<td><code>[2, 8, 14, 20, 24, 28, 32, 36]</code></td>
+<td>真正实例化 <code>Indexer</code> 并刷新 top-512 索引的 8 个 <code>source</code> 层，其余层复用（详见 <a href="/articles/dsv41-upstream/#322-%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E8%B0%81%E7%9C%9F%E7%9A%84%E6%8C%81%E6%9C%89%E6%A8%A1%E5%9D%97%E4%B8%89%E5%BC%A0-source-%E5%B1%82%E8%A1%A8">3.2.2 节</a>）</td>
+</tr>
+<tr>
+<td><code>index_n_heads</code> / <code>index_head_dim</code> / <code>index_topk</code></td>
+<td>32 / 128 / 512</td>
+<td>Indexer 检索器的打分头数、头宽，以及每轮从压缩缓存检索出的位置数（top-512）</td>
+</tr>
+<tr>
+<td><code>candidate_source_layer_id</code> / <code>candidate_topk_blocks</code> / <code>candidate_block_size</code></td>
+<td>20 / 2048 / 8</td>
+<td>L20 先粗筛出 2048 个候选块（每块含 8 个压缩位置），供后面层的 Indexer 做二次精选（详见 <a href="/articles/dsv41-upstream/#323-%E4%B8%A4%E7%BA%A7%E5%80%99%E9%80%89%E5%9C%A8-nv-%E8%B7%AF%E5%BE%84%E6%80%8E%E4%B9%88%E8%90%BD%E5%9C%B0">3.2.3 节</a>）</td>
+</tr>
+<tr>
+<td><code>hc_mult</code> / <code>hc_sinkhorn_iters</code> / <code>hc_eps</code></td>
+<td>4 / 20 / 1e-6</td>
+<td>mHC 的残差流数（4 条）、Sinkhorn 归一化迭代次数（把 <code>4×4</code> 流混合矩阵反复行/列归一防止数值爆炸）、RMSNorm 的 eps</td>
+</tr>
+<tr>
+<td><code>n_routed_experts</code> / <code>num_experts_per_tok</code> / <code>n_shared_experts</code></td>
+<td>384 / 6 / 1</td>
+<td>每层 384 个路由专家里挑 top-6，外加 1 个固定激活的共享专家</td>
+</tr>
+<tr>
+<td><code>moe_intermediate_size</code> / <code>swiglu_limit</code></td>
+<td>2304 / 10.0</td>
+<td>每个专家 FFN 的中间层宽度，以及 SwiGLU 激活值的截断上限</td>
+</tr>
+<tr>
+<td><code>scoring_func</code> / <code>topk_method</code> / <code>routed_scaling_factor</code></td>
+<td><code>sqrtsoftplus</code> / <code>noaux_tc</code> / 1.5</td>
+<td>路由门控的打分激活函数、无辅助损失偏置选 top-k 方法、路由专家输出求和后的放大倍数</td>
+</tr>
+<tr>
+<td><code>engram_layer_ids</code></td>
+<td>[1, 14]</td>
+<td>挂载 Engram 词组哈希查表模块的层号</td>
+</tr>
+<tr>
+<td><code>engram_max_ngram_size</code> / <code>engram_n_heads</code></td>
+<td>4 / 8</td>
+<td>统计 2/3/4-gram 共 3 种词长 × 8 个哈希头 = 每个位置查 <strong>24 个哈希列</strong></td>
+</tr>
+<tr>
+<td><code>num_nextn_predict_layers</code> / <code>dspark_block_size</code></td>
+<td>3 / 5</td>
+<td>DSpark 投机草稿模型共 3 层，单步预测 5 个草稿 token</td>
+</tr>
+<tr>
+<td><code>dspark_n_routed_experts</code> / <code>dspark_num_experts_per_tok</code></td>
+<td>128 / 3</td>
+<td><strong>draft 层的 MoE 规模小于主干</strong>（128 个专家选 top-3）</td>
+</tr>
+<tr>
+<td><code>dspark_target_layer_ids</code></td>
+<td>[37, 38, 39]</td>
+<td>DSpark 草稿模型从主干采集隐状态的层号</td>
+</tr>
+</tbody>
+</table></div>
+<p>24 个哈希列的公式在 <code>common/engram.py</code>：<code>n_hash_cols = (max_ngram_size - 1) * n_heads</code>（<code>EngramLayout</code>），配 <code>4</code> 和 <code>8</code> 得 24。源码注释也写明「每个位置按 <code>max_ngram_size - 1</code> 个 n-gram 哈希（2-gram 到 max）」。</p>
+<hr>
+<h2 id="2-先从上层走通一次-forward">2. 先从上层走通一次 forward</h2>
+<p>本章按实际调用顺序梳理主干的一次完整 <code>forward</code> 流程，并给出对应的核心代码片段与行号。<strong>mHC 算子、Attention、MoE 与 Engram 的内部实现均在第 3 章展开</strong>，本章仅关注它们的输入输出与层间状态传递。</p>
+<h3 id="21-对象怎样嵌套以及进第-0-层前先做了哪几步">2.1 对象怎样嵌套，以及进第 0 层前先做了哪几步</h3>
+<p>先看从顶层入口到单层内部的完整模块树：</p>
+<pre class="highlight"><code class="language-text">DeepseekV41ForCausalLM                   nvidia/vl_model.py:117（checkpoint 的 architectures）
+└─ language_model                        DeepseekV41LLMForCausalLM，nvidia/model.py:1537
+   ├─ model                              DeepseekV4Model，nvidia/model.py:662
+   │  ├─ embed_tokens                    VocabParallelEmbedding，vocab 129280 → [T,5120]（:726）
+   │  ├─ engram_hash                     NgramHashState，整批算一次 24 列 n-gram 哈希（:859）
+   │  ├─ engram_batch                    EngramBatch，进层前一次性把 L1/L14 的表项查好（:780）
+   │  ├─ layers[0..39]                   DeepseekV4DecoderLayer，nvidia/model.py:283
+   │  │  ├─ engram                       Engram（仅 L1、L14 不为 None，其余 38 层为 None，:305）
+   │  │  ├─ hc_attn_fn / hc_ffn_fn       mHC 混合系数投影 + attn_norm / ffn_norm
+   │  │  ├─ attn                         DeepseekV4FlashMLAAttention 等（:320）
+   │  │  └─ ffn                          DeepseekV4MoE（:333）
+   │  └─ norm                            末层 final RMSNorm(5120)（:865）
+   └─ lm_head                            ParallelLMHead，5120 → 129280（:1574）</code></pre>
+<p>顶层 <code>forward</code> 的调用链为：<code>DeepseekV41ForCausalLM.forward</code>（<code>nvidia/vl_model.py:289</code>）→ <code>DeepseekV41LLMForCausalLM.forward</code>（<code>nvidia/model.py:1639</code>）→ <strong><code>DeepseekV4Model.forward</code>（<code>nvidia/model.py:912</code>）</strong>。</p>
+<p>在进入 40 层循环之前，<code>DeepseekV4Model.forward</code>（<code>nvidia/model.py:912-1005</code>）先完成以下预处理：</p>
+<ol>
+<li><strong>查词嵌入（<code>embed_tokens</code>）</strong>：<code>hidden_states = self.embed_input_ids(input_ids)</code>（<code>:924</code>），得到 <code>[T, 5120]</code> 的初始二维激活。</li>
+<li><strong>计算全批 Engram n-gram 哈希（<code>engram_hash</code>）</strong>：在进入 Decoder 层及 Sequence Parallel 切分之前，调用 <code>self.engram_hash(...)</code>（<code>:966</code>）根据 <code>input_ids</code> 和前文 <code>lookback_token_ids</code> 计算整批 token 的 24 列哈希 ID <code>engram_hashes</code> 与 <code>engram_mask</code>（多模态场景下图像占位 token 对应的 mask 为 <code>False</code>，用于阻断跨图像边界的 n-gram，<code>:954-955</code>）。</li>
+<li><strong>批量预查 L1 / L14 的 Engram 表项（<code>engram_batch.prepare_embeddings</code>）</strong>：调用 <code>self.engram_batch.prepare_embeddings(engram_hashes)</code>（<code>:983</code>），在进入第 0 层前一次性查出 L1 和 L14 所需的嵌入向量（若开启 CPU offload，则在 <code>engram_prefetch_stream</code> 上发起异步预取）。后续执行到 L1 和 L14 的 <code>layer.engram(...)</code> 时直接消费该结果做门控注入。</li>
+<li>（可选）若开启 Sequence Parallel（SP），在 <code>:1003-1004</code> 将 <code>hidden_states</code> 和 <code>input_ids</code> 按 token 维切分（<code>sp_shard</code>），随后进入 40 层循环。</li>
+</ol>
+<h3 id="22-主干循环每层交还一个六元组">2.2 主干循环：每层交还一个六元组</h3>
+<p>完成上述预处理后，<code>DeepseekV4Model.forward</code> 在 <code>nvidia/model.py:1006-1024</code> 初始化 mHC 状态并调用 <code>self._run_layers</code>；而 <code>_run_layers</code> 的定义位于同文件 <code>nvidia/model.py:1093-1136</code>：</p>
+<pre class="highlight"><code class="language-python"># 1. 调用入口：DeepseekV4Model.forward（nvidia/model.py:1006-1024）
+residual, post_mix, res_mix = None, None, None
+pre_mix: torch.Tensor | None = None
+if not get_pp_group().is_first_rank:
+    pre_mix = intermediate_tensors["pre_mix"]
+aux_hidden_by_layer: dict[int, torch.Tensor] = {}
+hidden_states, residual, post_mix, res_mix, pre_mix = self._run_layers(
+    range(self.start_layer, self.decoder_replay_start),
+    hidden_states, positions, input_ids,
+    pre_mix, post_mix, res_mix, residual,
+    aux_hidden_by_layer, engram_hashes, engram_mask,
+)
+
+# 2. 循环定义：DeepseekV4Model._run_layers（nvidia/model.py:1093-1136）
+for idx in layer_ids:
+    hidden_states, residual, post_mix, res_mix, pre_mix, previous_aux = (
+        self.layers[idx](
+            hidden_states, positions, input_ids,
+            pre_mix, post_mix, res_mix, residual,
+            engram_hashes, engram_mask,
+            capture_previous_aux=idx in self.aux_hidden_state_layers,
+            mega_gate_metadata=mega_gate_metadata,
+        )
+    )
+    if previous_aux is not None:
+        # idx is the one-based id of the layer whose post this is.
+        aux_hidden_by_layer[idx] = previous_aux</code></pre>
+<p>与普通 Transformer 循环（每层只传递 <code>hidden_states</code>）不同，这里每层进出都传递 <strong>6 个张量</strong>：前 5 个 <code>(hidden_states, residual, post_mix, res_mix, pre_mix)</code> 是 <strong>mHC（四流超连接残差）</strong> 的跨层接力状态，第 6 个 <code>previous_aux</code> 是供 DSpark 草稿模型使用的隐状态采集口。</p>
+<p>从黑盒视角理解这 5 个跨层张量的作用，只需明确三点（从上层入口到底层 kernel 的调用链与数学公式见 <a href="/articles/dsv41-upstream/#31-mhc%E4%BB%8E%E4%B8%8A%E5%B1%82%E5%85%A5%E5%8F%A3%E5%88%B0-kernel-%E7%9A%84%E8%B0%83%E7%94%A8%E9%93%BE%E4%B8%8E%E5%86%85%E9%83%A8%E8%AE%A1%E7%AE%97">3.1 节</a>）：</p>
+<ul>
+<li><strong>主干维护 4 条残差流，子层仅接收 1 条流</strong>：<code>residual</code> 是 <code>[T, 4, 5120]</code> 的四流张量，而 Attention 和 MoE 的输入输出均为二维 <code>x [T, 5120]</code>。因此每次进出子层都需做「4 流 ↔ 1 流」转换：</li>
+<li><strong><code>pre</code>（进子层前，4 流 → 1 流）</strong>：用权重 <code>pre_mix</code> 将 4 条残差流加权合并为 1 条 <code>x_in [T, 5120]</code> 并做 RMSNorm 送入子层；同时计算出本子层出栈要用的 <code>post_mix</code>、<code>res_mix</code> 以及下一子层要用的新 <code>pre_mix</code>。</li>
+<li><strong><code>post</code>（出子层后，1 流 → 4 流）</strong>：子层输出单流 <code>x [T, 5120]</code> 后，用 <code>res_mix</code> 和 <code>post_mix</code> 将其合入 4 条残差流，更新出新的 <code>residual [T, 4, 5120]</code>。</li>
+<li><strong>为减少显存读写，将 <code>post</code> 推迟半步与下一子层的 <code>pre</code> 融合（Delayed mHC）</strong>：若每个子层末尾都立即执行 <code>post</code> 将 <code>[T, 4, 5120]</code> 写回显存，下一子层开头的 <code>pre</code> 又需立即从显存读取该张量。因此 vLLM <strong>不在子层末尾执行 <code>post</code>，而是将其推迟半步，在下一子层开头用融合算子 <code>mhc_shifted_post_pre</code> 一次性完成「上一子层的 post + 下一子层的 pre」</strong>。</li>
+<li><strong>半步错位的结果</strong>：每层末尾的 MoE 执行完毕后，其 <code>post</code> 尚未执行，因此需将 MoE 输出 <code>hidden_states</code> 连同待结清的 <code>residual / post_mix / res_mix / pre_mix</code> 一并返回主干，传入<strong>下一层开头</strong>完成更新。</li>
+</ul>
+<p>下图对比了同一层内 <strong>① 普通 Transformer（最左）</strong>、<strong>② 未延迟的正常 mHC（中间）</strong> 与 <strong>③ vLLM 实际执行的延迟 mHC（最右）</strong> 的执行边界：</p>
+<p><a class="diagram-link" href="/dsv41--assets--png--dsv41_mhc_delayed_compare.png" target="_blank" rel="noopener"><img alt="第 i 层残差接力对比：普通 Transformer vs 正常 mHC vs 延迟 mHC" src="/dsv41--assets--png--dsv41_mhc_delayed_compare.png"></a></p>
+<h3 id="23-单层内部四个入口分支与层末返回">2.3 单层内部：四个入口分支与层末返回</h3>
+<p>进入 <code>self.layers[idx]</code>，即 <code>DeepseekV4DecoderLayer.forward</code>（<code>nvidia/model.py:455-625</code>）。</p>
+<p>函数开头先确定本层是否启用 <strong>mHC 辅助流 <code>mhc_stream</code></strong>（<code>nvidia/model.py:478-490</code>），随后按当前层的位置进入 <strong>四条互斥的 mHC 入口分支</strong>（<code>:494-586</code>）：</p>
+<pre class="highlight"><code class="language-python"># 0. 确定本层是否启用辅助流 mhc_stream（nvidia/model.py:478-490）
+mhc_stream = self.mhc_stream
+if mhc_stream is not None and (
+    in_piecewise_cudagraph()
+    or not 0 &lt; positions.shape[0] &lt;= MHC_OVERLAP_MAX_TOKENS
+    or not torch.cuda.is_current_stream_capturing()
+):
+    mhc_stream = None
+mhc_pre = (
+    partial(mhc_pre_delayed_overlap, stream=mhc_stream)
+    if mhc_stream is not None
+    else mhc_pre_delayed_tilelang
+)
+
+# 1. 四条互斥的层入口分支（nvidia/model.py:494-586）
+if residual is None:
+    if x.dim() == 2:
+        # 分支 A 首层（:496-514）：embedding 广播成四流
+        residual = x.unsqueeze(1).expand(-1, self.hc_mult, -1).contiguous()
+        post_mix, res_mix, x, attn_pre = mhc_pre(
+            residual, self.hc_attn_fn_broadcast, ...)
+    else:
+        # 分支 B PP 非首 rank（:515-530）：接到的已经是四流
+        residual = x
+        post_mix, res_mix, x, attn_pre = mhc_pre(residual, self.hc_attn_fn, ..., pre_mix=pre_mix)
+elif self.engram is not None and engram_hashes is not None:
+    # 分支 C Engram 层 L1/L14（:531-561）
+    previous_post = mhc_post_tilelang(x, residual, post_mix, res_mix)
+    residual = self.engram(previous_post, engram_hashes[:, self.engram.layer_hash_index], engram_mask)
+    post_mix, res_mix, x, attn_pre = mhc_pre(residual, self.hc_attn_fn, ..., pre_mix=pre_mix)
+else:
+    # 分支 D 普通层（:562-586）：post 与 pre 融在一个核里
+    residual, post_mix, res_mix, x, attn_pre, aux = mhc_shifted_post_pre(
+        x, residual, post_mix, res_mix, self.hc_attn_fn, ...,
+        stream=mhc_stream, reduce_results=self.fuse_mhc_all_reduce)</code></pre>
+<ul>
+<li><strong>分支 A（第 0 层，<code>:496-514</code>）</strong>：使用专用权重 <code>hc_attn_fn_broadcast</code>。第 0 层没有前一层遗留的 <code>post</code> 和 <code>pre_mix</code>，需先将词嵌入 <code>x [T, 5120]</code> 广播为 4 条相同的流 <code>[T, 4, 5120]</code>，再计算首组混合系数。</li>
+<li><strong>分支 B（流水线并行 PP 的非首卡，<code>:515-530</code>）</strong>：前一张卡在层边界切分时已完成 <code>post</code> 并传入四流 <code>residual</code>，因此直接调用 <code>mhc_pre</code>。</li>
+<li><strong>分支 D（普通层，<code>:562-586</code>）</strong>：调用融合算子 ① <code>mhc_shifted_post_pre</code>（权重为 <code>hc_attn_fn</code>），在单个 kernel 内先完成上一层 MoE 的 <code>post</code>（得到上图中的 <code>residual₀</code>），再完成本层 Attention 前的 <code>pre</code>（输出二维 <code>x</code> 与 <code>attn_pre</code>）。</li>
+<li><strong>分支 C（挂载 Engram 的 L1 和 L14，<code>:531-561</code>）是延迟融合的唯一例外</strong>：Engram 的查表结果需注入到「上一层刚完成 <code>post</code> 的四流残差」上，使本层计算的混合系数能反映注入后的残差。因此这两层不能走融合算子，而是拆为三步：先调 <code>mhc_post_tilelang</code> 完成上一层 MoE 的 <code>post</code> → 调 <code>self.engram(...)</code> 注入词组向量 → 再调 <code>mhc_pre</code> 执行本层 Attention 前的 <code>pre</code>。</li>
+</ul>
+<p>完成入口分支得到二维 <code>x [T, 5120]</code> 后，单层后半段（<code>nvidia/model.py:591-625</code>）依次执行 Attention、融合算子 ② 与 MoE：</p>
+<pre class="highlight"><code class="language-python">x = self.attn(positions, x, None)                      # 1. Attention 子层（:591，内部见 3.2）
+
+if mhc_stream is not None:                             # 等待入口 mhc 在辅助流上的计算（:597-598）
+    torch.cuda.current_stream().wait_stream(mhc_stream)
+
+residual, post_mix, res_mix, x, ffn_pre, _ = mhc_shifted_post_pre(
+    x, residual, post_mix, res_mix, self.hc_ffn_fn, ...,
+    pre_mix=attn_pre, norm_weight=self.ffn_norm.weight,
+    stream=mhc_stream, reduce_results=self.fuse_mhc_all_reduce,
+)                                                      # 2. 合入 Attn 的 post，并用 attn_pre 做 MoE 的 pre（:599-617）
+
+if self.fuse_mhc_all_reduce and self.ffn.defers_finalize(x.shape[0]):
+    x = self.ffn.forward_unfinalized(x, input_ids)     # 3a. 延迟归约版 MoE（:618-620，官方配置不触发）
+else:
+    x = self.ffn(x, input_ids, mega_gate_metadata)     # 3b. 常规 MoE 子层（:621-622，内部见 3.3）
+
+if mhc_stream is not None:                             # 等待第 2 步在辅助流上的计算（:623-624）
+    torch.cuda.current_stream().wait_stream(mhc_stream)
+
+return x, residual, post_mix, res_mix, ffn_pre, previous_aux  # （:625）</code></pre>
+<p>后半段代码中包含两处条件分支：</p>
+<ul>
+<li><strong><code>if mhc_stream is not None</code>（<code>:478-490</code>、<code>:597-598</code>、<code>:623-624</code>）——mHC 辅助流重叠</strong>：当启用完整 CUDA Graph（<code>not in_piecewise_cudagraph()</code> 且处于捕获态）且 token 数落在 <code>(0, MHC_OVERLAP_MAX_TOKENS]</code> 时，第 0 步会保留 <code>self.mhc_stream</code>，将 mHC 计算混合系数的小矩阵乘放到辅助流上与主流并行执行，并在 Attention 之后（<code>:598</code>）及层末返回前（<code>:624</code>）各执行一次 <code>wait_stream</code> 同步。</li>
+<li><strong><code>if self.fuse_mhc_all_reduce and self.ffn.defers_finalize(x.shape[0])</code>（<code>:618-622</code>）——MoE 延迟归约</strong>：满足条件时，MoE 调用 <code>forward_unfinalized</code> 返回未完成归约的 <code>MoEOutput</code>，将专家输出归约推迟到下一层入口的 <code>mhc_shifted_post_pre</code>（<code>:583</code> 的 <code>reduce_results=self.fuse_mhc_all_reduce</code>）中合并执行。但在<strong>官方 checkpoint 配置下 <code>defers_finalize</code> 恒为 <code>False</code>，始终走 <code>else</code> 分支的常规 <code>self.ffn(...)</code></strong>（原因见 <a href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft">3.3 节</a>）。</li>
+</ul>
+<p>对照 <code>:591-625</code>，层末 <code>:625</code> 返回给主干循环的 <strong>6 个返回值</strong>来源与用途如下——<strong>前 5 个张量中，仅第 1 个 <code>x</code> 是本层 MoE（<code>self.ffn</code>）的直接输出，其余 4 个均在第 2 步「进 MoE 之前」的 <code>mhc_shifted_post_pre</code>（<code>:599</code>）中计算生成，跨过 MoE 原样传递至下一层</strong>：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>层末 <code>return</code> 项</th>
+<th>下一层接收的形参名</th>
+<th>形状</th>
+<th>本层生成位置</th>
+<th>传入下一层的用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>x</code></strong></td>
+<td><code>x</code>（主干中为 <code>hidden_states</code>）</td>
+<td><code>[T, 5120]</code></td>
+<td><strong>后半段第 3 步（<code>:622</code>）：本层 MoE（<code>self.ffn</code>）的直接输出</strong></td>
+<td>供下一层入口执行 MoE 的 <code>post</code>（合入 4 流）</td>
+</tr>
+<tr>
+<td><strong><code>residual</code></strong></td>
+<td><code>residual</code></td>
+<td><code>[T, 4, 5120]</code></td>
+<td>后半段第 2 步（<code>:599</code>）：<strong>进 MoE 前</strong>的 <code>mhc_shifted_post_pre</code></td>
+<td>本层合入 Attention 后的 4 流残差基座（即图中的 <code>residual₁</code>）</td>
+</tr>
+<tr>
+<td><strong><code>post_mix</code></strong></td>
+<td><code>post_mix</code></td>
+<td><code>[T, 4, 1]</code></td>
+<td>后半段第 2 步（<code>:599</code>）：<strong>进 MoE 前</strong>的 <code>mhc_shifted_post_pre</code></td>
+<td>下一层入口执行 <code>post</code> 时对 <code>x</code> 做 4 路加权缩放</td>
+</tr>
+<tr>
+<td><strong><code>res_mix</code></strong></td>
+<td><code>res_mix</code></td>
+<td><code>[T, 4, 4]</code></td>
+<td>后半段第 2 步（<code>:599</code>）：<strong>进 MoE 前</strong>的 <code>mhc_shifted_post_pre</code></td>
+<td>下一层入口执行 <code>post</code> 时对 <code>residual</code> 的 4 条流做 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mo>×</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">4\times 4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span> 混合</td>
+</tr>
+<tr>
+<td><strong><code>ffn_pre</code></strong></td>
+<td><code>pre_mix</code>（层内层外命名不同）</td>
+<td><code>[T, 4]</code></td>
+<td>后半段第 2 步（<code>:599</code>）：<strong>进 MoE 前</strong>的 <code>mhc_shifted_post_pre</code></td>
+<td>下一层入口算完 <code>post</code> 得到 <code>residual₀</code> 后，用它将 4 流合并为 1 流送入下一层 Attention</td>
+</tr>
+<tr>
+<td><strong><code>previous_aux</code></strong></td>
+<td>（主干存入 <code>aux_hidden_by_layer[idx]</code>）</td>
+<td><code>[T, 5120]</code></td>
+<td><strong>前半段层入口（<code>:565</code> / <code>:542</code>）</strong>：分支 D 或分支 C</td>
+<td>因第 <code>idx-1</code> 层末尾的 <code>post</code> 推迟至第 <code>idx</code> 层入口完成，此处取出的 <code>aux</code> 对应<strong>上一层完整结束后的隐状态</strong>（供 DSpark 采集 <code>dspark_target_layer_ids = [37, 38, 39]</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<p>因此，<strong>MoE 本身只是一个 <code>[T, 5120] → [T, 5120]</code> 的二维变换模块，不感知 4 条残差流与 <code>mix</code> 系数</strong>。</p>
+<h3 id="24-后半段分流decoder_replay_layers与末层四流合并_collapse--hc_collapse_triton">2.4 后半段分流（<code>decoder_replay_layers</code>）与末层四流合并（<code>_collapse</code> / <code>hc_collapse_triton</code>）</h3>
+<p>回到 <code>DeepseekV4Model.forward</code>（<code>nvidia/model.py:1012-1077</code>），紧接在第一次 <code>self._run_layers</code> 之后，代码并不是直接调 <code>_collapse</code>，而是先经过一个 <code>if self.decoder_replay_layers is not None:</code> 分支（<code>:1026-1045</code>）：</p>
+<pre class="highlight"><code class="language-python"># 1. 外层入口：DeepseekV4Model.forward（nvidia/model.py:1012-1045）
+#    先跑前半段 range(0, 20)，即 L0 ~ L19（若未启用 replay，则 decoder_replay_start=40，直接跑满 40 层）
+hidden_states, residual, post_mix, res_mix, pre_mix = self._run_layers(
+    range(self.start_layer, self.decoder_replay_start),   # range(0, 20) → L0 ~ L19
+    hidden_states, positions, input_ids,
+    pre_mix, post_mix, res_mix, residual,
+    aux_hidden_by_layer, engram_hashes, engram_mask,
+)
+late_aux: list[torch.Tensor] = []
+if self.decoder_replay_layers is not None:
+    # 紧接着在这里进入 _run_replay_layers，继续跑完后半段 range(20, 40)，即 L20 ~ L39！
+    hidden_states, pre_mix, *late_aux = self.decoder_replay_layers(
+        hidden_states, positions, input_ids,
+        pre_mix, post_mix, res_mix, residual,
+    )
+else:
+    hidden_states = self._collapse(
+        hidden_states, residual, post_mix, res_mix,
+        aux_hidden_by_layer, full_num_tokens,
+    )
+
+# 2. self.decoder_replay_layers 内部调用的 _run_replay_layers（nvidia/model.py:1160-1191）
+def _run_replay_layers(self, hidden_states, positions, input_ids, pre_mix, post_mix, res_mix, residual):
+    aux_hidden_by_layer: dict[int, torch.Tensor] = {}
+    # 第二次调用 _run_layers：跑完后半段 range(20, 40)，即 L20 ~ L39
+    hidden_states, residual, post_mix, res_mix, pre_mix = self._run_layers(
+        range(self.decoder_replay_start, self.end_layer), # range(20, 40) → L20 ~ L39
+        hidden_states, positions, input_ids,
+        pre_mix, post_mix, res_mix, residual,
+        aux_hidden_by_layer,
+    )
+    hidden_states = self._collapse(
+        hidden_states, residual, post_mix, res_mix,
+        aux_hidden_by_layer, positions.shape[0],
+    )
+    return hidden_states, pre_mix, ...</code></pre>
+<p>先看清 <strong><code>self.decoder_replay_start</code> 与 <code>self.decoder_replay_layers</code>（<code>:1026</code>）在干什么</strong>（初始化见 <code>nvidia/model.py:800-839</code>，实现见 <code>models/deepseek_v41/decoder_replay_layers.py:40</code>）：</p>
+<ul>
+<li><strong>注意：不是只跑前 20 层！无论 Prefill 还是 Decode，都会跑满全部 40 层；区别在于长 Prefill 时，后 20 层（<code>L20–L39</code>）只对每个请求末尾的 <code>128</code> 个 token 执行计算。</strong></li>
+<li><strong>为什么长 Prefill（例如输入 <code>#0 ~ #9999</code> 共 10,000 个 token）在 L20 之后可以扔掉前 9,872 个 token？</strong>
+  1. <strong>L21–L39 不再写压缩 KV cache</strong>：在 <code>DeepseekV4Model.__init__</code>（<code>:805</code>）中，<code>cut = max(config.kv_source_layer_ids) = 20</code>——<strong>L20 是全模型最后一个写压缩 KV cache 的层</strong>，L21–L39 全部共用 L20 写好的压缩 KV（见 <a href="/articles/dsv41-upstream/#322-%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E8%B0%81%E7%9C%9F%E7%9A%84%E6%8C%81%E6%9C%89%E6%A8%A1%E5%9D%97%E4%B8%89%E5%BC%A0-source-%E5%B1%82%E8%A1%A8">3.2.2 节</a>）。只要 <strong>L20</strong> 把 <code>#0 ~ #9999</code> 全部 10,000 个 token 的压缩 KV 写进 cache，全量压缩历史就已经构建完毕。
+  2. <strong>L21–L39 的本层 SWA 滑窗只留最后 128 个 token</strong>：L21–L39 自己只维护容量为 <code>sliding_window = 128</code> 的滑窗 cache。对于 10,000 个 token 的 Prompt，前 9,872 个 token（<code>#0 ~ #9871</code>）即使在 L21–L39 算出 SWA KV，也会滑出窗口被丢弃；而末尾的 <code>#9872 ~ #9999</code> 在 L21–L39 做注意力时，远处历史读的是 L20 写好的压缩 KV，近处滑窗也只互相关注 <code>#9872 ~ #9999</code> 这 128 个位置内部——<strong>前 9,872 个 token 在 L20 之后的隐状态对最终输出（<code>#9999</code> 的 logits）及后续 decode 的 cache 均无任何影响</strong>。</li>
+<li><strong>两段式执行流程（对应 <code>:830-838</code> 的日志说明）</strong>：</li>
+</ul>
+<pre class="highlight"><code class="language-text">输入长 Prompt：10,000 个 token（#0 ~ #9999）
+  │
+  ▼
+【第一段：L0 ~ L19（前 20 层）】self._run_layers(range(0, 20), ...)（:1012）
+  • 全部 10,000 个 token（#0 ~ #9999）完整跑完 L0 ~ L19
+  │
+  ▼
+【第二段：L20 ~ L39（后 20 层）】self.decoder_replay_layers(...)（:1026）
+  ├─ 长 Prefill 步（启用裁剪子批 replay_batch）：
+  │    1) 先调 self.layers[20].write_kv(...)（:627），替 L20 把全部 10,000 个 token 的压缩 KV、Indexer K 与 SWA KV 写入 cache
+  │    2) 丢弃前 9,872 个 token（#0 ~ #9871），将 batch 裁剪为仅剩末尾 128 个 token（#9872 ~ #9999）
+  │    3) 调 self._run_replay_layers（:1160）→ self._run_layers(range(20, 40), ...)，仅对这 128 个 token 跑完 L20 ~ L39
+  │
+  └─ 普通 Decode 步（或长度 ≤ 128 的短 Prefill，此时 replay_batch is None）：
+       • 完全没有两阶段裁剪！uses_replay_batch() 为 False（decoder_replay_layers.py:73, 112），既不调 write_kv 也不裁 token，直接原样调 _run_layers(range(20, 40)) 接着跑完后 20 层，与一口气跑 range(0, 40) 完全等价。</code></pre>
+<ul>
+<li><strong>什么条件控制 <code>self.decoder_replay_layers</code> 是否启用（即是不是 <code>None</code>）？</strong>
+  它由 <code>DeepseekV4Model.__init__</code>（<code>nvidia/model.py:806-810</code>）中的三个条件共同决定，<strong>只要有一条不满足，<code>self.decoder_replay_layers</code> 就是 <code>None</code>（此时 <code>self.decoder_replay_start = 40</code>）</strong>：
+  1. <strong><code>self.layers[cut].attn.swa_cache_layer.bounded_replay</code> 为 <code>True</code></strong>（<code>attention.py:529-567</code>）：<ul>
+<li>总开关是 <code>CacheConfig.swa_bounded_replay</code>（<code>config/cache.py:250</code>，<strong>默认为 <code>True</code></strong>）；</li>
+<li>必须使用 <strong>Model Runner V2</strong>（<code>vllm_config.use_v2_model_runner</code> 为 <code>True</code>）；</li>
+<li>未开启 Prefill Context Parallel（<code>prefill_context_parallel_size == 1</code>）且非 ROCm 平台。
+  2. <strong><code>self._decoder_replay_supported(vllm_config, cut)</code> 返回 <code>True</code></strong>（<code>nvidia/model.py:1202-1240</code>）：</li>
+<li><strong>未开启 Sequence Parallel（SP）</strong>（<code>not self.use_sequence_parallel</code>）、未开启 <code>prefill_context_parallel_size &gt; 1</code>、未开启微批（<code>not use_ubatching</code>）；</li>
+<li><strong>PP 切分未把 <code>L20–L39</code> 拆到不同卡上</strong>（持有 L20 的 PP stage 必须同时持有 L20 之后的全部层：<code>self.start_layer &lt;= 20</code> 且 <code>self.end_layer == 40</code>）；</li>
+<li><code>cut</code>（L20）及之后没有挂载 Engram 层（官方配置 Engram 在 L1 和 L14，满足）；</li>
+<li>若挂了投机草稿模型（DSpark），草稿模型的滑窗不能超过主干的 128 窗口（官方配置相等，满足）。
+  3. <strong><code>cut &lt; self.end_layer - 1</code></strong>：<code>cut = max(config.kv_source_layer_ids) = 20 &lt; 39</code>，恒满足。</li>
+</ul>
+</li>
+<li>
+<p>此外，即使 <code>self.decoder_replay_layers</code> 不为 <code>None</code>，在每个 step 运行时是否真正裁剪（<code>uses_replay_batch()</code>），还由 <code>DeepseekV41ModelState</code>（<code>nvidia/model_state.py:220-276</code>）按当步请求动态决定：只有当某条 Prefill 请求的 token 数超过窗口 <code>128</code>、且该请求没有开启 <code>prompt_logprobs</code>（开启 <code>prompt_logprobs</code> 需要所有 prompt 位置的 logits，不能丢弃前文）时，才会构造 <code>replay_batch</code> 触发裁剪。</p>
+</li>
+<li>
+<p><strong>为什么上面代码里有两处 <code>self._collapse</code>（<code>:1037</code> 与 <code>:1184</code>）？它们是 <code>if / else</code> 互斥的，同一次 <code>forward</code> 只会执行其中一处</strong>：</p>
+</li>
+<li><strong>当走 <code>:1026</code> 的 <code>if</code> 分支时</strong>（默认启用 <code>decoder_replay_layers</code>）：<code>else</code> 分支不会执行。之所以把 <code>self._collapse</code> 放在 <code>_run_replay_layers</code> 内部（<code>:1184</code>）而不是提到 <code>if / else</code> 外面，是因为长 Prefill 裁剪时，<code>decoder_replay_layers._run</code>（<code>decoder_replay_layers.py:115-130</code>）会先把 10,000 行 <code>index_select</code> 裁剪成 <strong>128 行</strong>送入 <code>_run_replay_layers</code>，算完后再用 <code>index_copy_</code> 把结果填回 10,000 行的零张量——在填回 10,000 行<strong>之前</strong>先对这 128 行调 <code>_collapse</code>，既只需对 128 行算 <code>mhc_post_tilelang</code>，又当场消费掉了 <code>post_mix / res_mix</code>，无需再把它们填回 10,000 行往外传。</li>
+<li><strong>当走 <code>:1036</code> 的 <code>else</code> 分支时</strong>（如开启了 SP 时 <code>decoder_replay_layers is None</code>，<code>decoder_replay_start = 40</code>）：不会调用 <code>_run_replay_layers</code>；<code>:1012</code> 一次跑完 <code>range(0, 40)</code> 后，直接在 <code>:1037</code> 调那一次 <code>self._collapse</code>。</li>
+</ul>
+<p>最后看第 39 层跑完后的<strong>末层收尾（把 4 条流加权合并回 1 条流）</strong>。</p>
+<p>主干循环内部一直维护着 4 条并行的残差流 <code>[T, 4, 5120]</code>，但最后的 <code>self.norm</code>（<code>RMSNorm(5120)</code>）和 <code>self.lm_head</code>（<code>5120 → 129280</code>）只接收标准的二维单流张量 <code>[T, 5120]</code>；因此在跑完第 39 层后，必须把 <code>[T, 4, 5120]</code> 的 4 条流加权求和合并成 1 条 <code>[T, 5120]</code>（源码函数名里用 <code>collapse</code> 指代这次四流合并）。</p>
+<p>注意代码里有两个名字都带 <code>collapse</code> 的函数，它们前后脚配合完成最后三步收尾（<code>nvidia/model.py:1058-1077</code>、<code>:1138-1158</code>、<code>:1609-1614</code>）：</p>
+<pre class="highlight"><code class="language-python"># 第 1 步：self._collapse（nvidia/model.py:1138-1158）
+#   注意：虽然函数名叫 _collapse，但它只负责替最后一层（L39）补做欠着的 MoE post，
+#   返回的 hidden_states 仍然是 4 条流 [T, 4, 5120]！
+hidden_states = mhc_post_tilelang(hidden_states, residual, post_mix, res_mix)  # [T, 4, 5120]
+if self.end_layer in self.aux_hidden_state_layers:
+    final_aux = hidden_states.mean(dim=1)
+    aux_hidden_by_layer[self.end_layer] = final_aux
+
+# 第 2 步：hc_collapse_triton + self.norm（nvidia/model.py:1070-1071）
+#   这一步才真正把 4 条流 [T, 4, 5120] 按末层的 pre_mix [T, 4] 加权求和合并成 1 条流 [T, 5120]，
+#   等价于：(hidden_states.float() * pre_mix.unsqueeze(-1)).sum(dim=1).to(bfloat16)
+hidden_states = hc_collapse_triton(hidden_states, pre_mix)                     # [T, 4, 5120] → [T, 5120]
+hidden_states = self.norm(hidden_states)                                       # [T, 5120]
+
+# 第 3 步：DeepseekV41LLMForCausalLM.compute_logits（nvidia/model.py:1609-1614）：投影到词表
+logits = self.logits_processor(self.lm_head, hidden_states)                    # [n_logits, 129280]</code></pre>
+<p><strong><code>self.norm</code> 与 <code>self.lm_head</code> 看到的维度始终是 5120，不是 20480</strong>——四条流只在 mHC 内部存在，并且末端没有额外可学习的 <code>hc_head</code> 权重，四流合并算子 <code>hc_collapse_triton</code>（<code>model_executor/kernels/mhc/triton.py:108</code>）就是直接拿第 39 层留下的 <code>pre_mix</code> 对 4 条流做一次 FP32 加权求和：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>out</mtext><mo stretchy="false">[</mo><mi>t</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>m</mi><mo>=</mo><mn>0</mn></mrow><mn>3</mn></munderover><mtext>pre_mix</mtext><mo stretchy="false">[</mo><mi>t</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo><mo>⋅</mo><mtext>hidden_states</mtext><mo stretchy="false">[</mo><mi>t</mi><mo separator="true">,</mo><mi>m</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\text{out}[t, :] = \sum_{m=0}^{3} \text{pre\_mix}[t, m] \cdot \text{hidden\_states}[t, m, :]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">out</span></span><span class="mopen">[</span><span class="mord mathnormal">t</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:3.0682em;vertical-align:-1.2671em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">pre_mix</span></span><span class="mopen">[</span><span class="mord mathnormal">t</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">hidden_states</span></span><span class="mopen">[</span><span class="mord mathnormal">t</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">]</span></span></span></span></span>
+<p>（若开启了投机解码，在 <code>:1059-1064</code> 执行 <code>hc_collapse_triton</code> 合并之前，还会先把未合并的四流状态 <code>[T, 4, 5120]</code> 展平为 <code>[T, 20480]</code> 拷入 <code>self._mtp_hidden_buffer</code>。）</p>
+<hr>
+<h2 id="3-深入模块内部mhcattentionmoeengram-与-dspark">3. 深入模块内部：mHC、Attention、MoE、Engram 与 DSpark</h2>
+<p>第 2 章把各子模块当黑盒走通了主干。这一章平级展开它们的内部实现。</p>
+<h3 id="31-mhc从上层入口到-kernel-的调用链与内部计算">3.1 mHC：从上层入口到 kernel 的调用链与内部计算</h3>
+<h4 id="311-上层入口与调用链从-decoderlayer-怎么一路调到底层-kernel">3.1.1 上层入口与调用链：从 <code>DecoderLayer</code> 怎么一路调到底层 kernel</h4>
+<p>先看完整的三级调用链——<code>DeepseekV4DecoderLayer.forward</code>（<code>nvidia/model.py</code>）并不直接调底层 CUDA/TileLang 算子，而是先调 <strong><code>models/deepseek_v41/nvidia/ops/mhc.py</code></strong> 里的上层分派入口，再由它分发到 <code>mega_mhc.py</code> 或 <code>model_executor/kernels/mhc/tilelang.py</code>：</p>
+<pre class="highlight"><code class="language-text">DeepseekV4DecoderLayer.forward（models/deepseek_v41/nvidia/model.py:455-625）
+├─ 1. 普通层入口（:565）与进 MoE 前（:599）：调 mhc_shifted_post_pre（nvidia/ops/mhc.py:191）
+│     ├─ [可选前置] 若开启 fuse_mhc_all_reduce（:220-255）：
+│     │     └─ _all_reduce_mhc（nvidia/ops/cute_dsl.py:AllReduceMHC，把 TP all-reduce 与 post+pre_mix 四流合并融为一核）
+│     ├─ 分支 ① 若传了辅助流 stream is not None（FULL cudagraph + token 数 ≤ 16，:256-281）：
+│     │     ├─ mhc_post_tilelang（kernels/mhc/tilelang.py:791）→ _MHC_POST_TILELANG_KERNEL
+│     │     └─ mhc_pre_delayed_overlap（nvidia/ops/mhc.py:98）
+│     │           ├─ 主流：MHC_PRE_NORM_KERNEL(split_mode="input") 先合并出当前子层输入 x
+│     │           └─ 辅助流 mhc_stream：tf32_hc_prenorm_gemm + MHC_PRE_NORM_KERNEL(split_mode="stats") 算混合系数
+│     ├─ 分支 ② 若 can_use_mega_mhc(...) 为真（SM100 + DeepGEMM + not capture_aux，:284-303）：
+│     │     └─ mhc_shifted_post_pre_deep_gemm（nvidia/ops/mega_mhc.py:47）
+│     │           └─ deep_gemm.mega_mhc（utils/deep_gemm.py，单核包揽 post + 24维投影 + Sinkhorn + 四流合并 + RMSNorm）
+│     └─ 分支 ③ 其余情况兜底（:305-323）：
+│           └─ mhc_fused_post_pre_delayed_tilelang（kernels/mhc/tilelang.py:269）
+│                 ├─ 小 batch（:386-397）：_MHC_FUSED_TILELANG_KERNEL（寄存器内连做 post + 24维投影 GEMM）
+│                 ├─ 大 batch（:398-432）：_MHC_POST_TILELANG_KERNEL + tf32_hc_prenorm_gemm
+│                 └─ 尾部（:442-497）：MHC_PRE_NORM_KERNEL（Triton 核：Sinkhorn + pre_mix 四流合并 + RMSNorm）
+│
+├─ 2. 首层（:501）/ PP 非首卡（:517）/ Engram 层（:548）单独做 pre：调 mhc_pre（:486-490 绑定）
+│     ├─ 有 mhc_stream：mhc_pre_delayed_overlap（nvidia/ops/mhc.py:98，同上）
+│     └─ 无 mhc_stream：mhc_pre_delayed_tilelang（kernels/mhc/tilelang.py:74）
+│           └─ tf32_hc_prenorm_gemm（或 _HC_PRENORM_GEMM_TILELANG_KERNEL）+ MHC_PRE_NORM_KERNEL
+│
+└─ 3. Engram 层入口（:540）与末层 _collapse（:1141）单独做 post：
+      └─ mhc_post_tilelang（kernels/mhc/tilelang.py:791）→ _MHC_POST_TILELANG_KERNEL</code></pre>
+<p>顺着这张调用树，直接看上层主入口 <strong><code>mhc_shifted_post_pre</code>（<code>nvidia/ops/mhc.py:191-323</code>）</strong> 的分派代码就很清楚了：</p>
+<pre class="highlight"><code class="language-python"># models/deepseek_v41/nvidia/ops/mhc.py:191-323
+def mhc_shifted_post_pre(x, residual, post_layer_mix, comb_res_mix, fn, ...,
+                         pre_mix=None, norm_weight=None, capture_aux=False,
+                         stream=None, reduce_results=False):
+    # 前置：若开启 fuse_mhc_all_reduce（TP=4 + NVLink 多播），用 CuTe DSL 融合核顺带完成归约与 post（:220-255）
+    ...
+    # 分支 ①：传了辅助流 mhc_stream（FULL cudagraph 且 token 数 ≤ 16），拆成 post + 辅助流 overlap pre（:256-281）
+    if stream is not None:
+        if layer_input is None:
+            residual = mhc_post_tilelang(x, residual, post_layer_mix, comb_res_mix)
+        aux = residual.mean(dim=1) if capture_aux else residual.new_empty(0, residual.shape[-1])
+        pre_outputs = mhc_pre_delayed_overlap(residual, fn, ..., pre_mix=pre_mix,
+                                              norm_weight=norm_weight, stream=stream, layer_input=layer_input)
+        return residual, *pre_outputs, aux
+
+    # 分支 ②：满足 Mega-mHC 条件时，走 DeepGEMM 单核全融合（:284-303）
+    if can_use_mega_mhc(x, residual, pre_mix, norm_weight, capture_aux):
+        outputs = mhc_shifted_post_pre_deep_gemm(x, residual, pre_mix, post_layer_mix, comb_res_mix, fn, ...)
+        return *outputs, x.new_empty(0, x.shape[1])
+
+    # 分支 ③：兜底走 TileLang 融合路径（:305-323）
+    return mhc_fused_post_pre_delayed_tilelang(x, residual, post_layer_mix, comb_res_mix, fn, ...,
+                                               pre_mix=pre_mix, norm_weight=norm_weight, capture_aux=capture_aux)</code></pre>
+<p>其中决定走不走分支 ②（<code>mhc_shifted_post_pre_deep_gemm</code>）的判定函数在 <code>nvidia/ops/mega_mhc.py:17-45</code>：</p>
+<pre class="highlight"><code class="language-python"># models/deepseek_v41/nvidia/ops/mega_mhc.py:17-45
+def is_mega_mhc_supported(hidden_size, hc_mult) -&gt; bool:
+    if not (is_deep_gemm_supported()
+            and current_platform.is_device_capability_family(100)
+            and hidden_size &gt; 0 and hidden_size % 1024 == 0
+            and hc_mult == 4):
+        return False
+    deep_gemm = _import_deep_gemm()
+    return deep_gemm is not None and callable(getattr(deep_gemm, "mega_mhc", None))
+
+def can_use_mega_mhc(x, residual, pre_mix, norm_weight, capture_aux) -&gt; bool:
+    return (pre_mix is not None and norm_weight is not None
+            and not capture_aux
+            and x.shape[0] &lt;= 1 &lt;&lt; 20
+            and is_mega_mhc_supported(x.shape[1], residual.shape[1]))</code></pre>
+<ul>
+<li><strong>静态条件官方配置全部满足</strong>：<code>hidden_size = 5120</code> 是 1024 的 5 倍，<code>hc_mult = 4</code>，因此在 SM100 家族 + DeepGEMM 可用时满足尺寸约束。（注意两个参数的维度：<code>x</code> 为二维 <code>[T,5120]</code>，故 <code>x.shape[1]</code> 是 <code>hidden_size</code>；<code>residual</code> 为三维 <code>[T,4,5120]</code>，故 <code>residual.shape[1]</code> 是 <code>hc_mult</code>。）</li>
+<li><strong>动态条件 <code>not capture_aux</code> 会使采集隐状态的层回退到分支 ③（TileLang）</strong>：需要为 DSpark 采集 <code>previous_aux</code> 的层边界（<code>dspark_target_layer_ids = [37, 38, 39]</code>）不满足 <code>not capture_aux</code>，会自动回退到分支 ③ 的 <code>mhc_fused_post_pre_delayed_tilelang</code>。因此单次 forward 中 40 层未必全部执行同一个底层 kernel。</li>
+</ul>
+<h4 id="312-算子内部算了什么post-与-pre-的数学逻辑">3.1.2 算子内部算了什么：<code>post</code> 与 <code>pre</code> 的数学逻辑</h4>
+<p>无论分派到 DeepGEMM 还是 TileLang，底层 kernel 的数学逻辑均等价于 <code>model_executor/kernels/mhc/torch.py</code> 中的纯 PyTorch 参考实现：</p>
+<ul>
+<li><strong><code>post</code> 如何将单流输出 <code>x [T, 5120]</code> 合入 4 条流 <code>residual [T, 4, 5120]</code></strong>（对应 <code>_MHC_POST_TILELANG_KERNEL</code>；参考实现 <code>mhc_post_torch</code> 位于 <code>kernels/mhc/torch.py:135-147</code>）：
+  <pre class="highlight"><code class="language-python"># 1. 4 条旧残差流先按 4×4 矩阵 res_mix 交叉加权（每条新流都是 4 条旧流的线性组合）
+mixed_residual = torch.einsum("...ij,...ih-&gt;...jh", res_mix, residual)     # [T, 4, 5120]
+# 2. 单流输出 x 按 4 个权重 post_mix 缩放为 4 份，分别加到上面 4 条流上
+residual_new = mixed_residual + post_mix * x.unsqueeze(-2)                 # [T, 4, 5120]</code></pre>
+  第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span></span></span></span> 条残差流（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi><mo>=</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mn>2</mn><mo separator="true">,</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">j = 0, 1, 2, 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span></span></span></span>）的更新公式为：</li>
+</ul>
+<p>$<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mtext>residual</mtext><mtext>new</mtext></msub><mo stretchy="false">[</mo><mo>:</mo><mo separator="true">,</mo><mi>j</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo><mo>=</mo><munder><munder><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mn>3</mn></msubsup><mtext>res_mix</mtext><mo stretchy="false">[</mo><mo>:</mo><mo separator="true">,</mo><mi>i</mi><mo separator="true">,</mo><mi>j</mi><mo stretchy="false">]</mo><mo>⋅</mo><mtext>residual</mtext><mo stretchy="false">[</mo><mo>:</mo><mo separator="true">,</mo><mi>i</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo></mrow><mo stretchy="true">⏟</mo></munder><mrow><mtext>① 4 条旧流按 </mtext><mn>4</mn><mo>×</mo><mn>4</mn><mtext> 矩阵做线性组合</mtext></mrow></munder><mtext>  </mtext><mo>+</mo><mtext>  </mtext><munder><munder><mrow><mtext>post_mix</mtext><mo stretchy="false">[</mo><mo>:</mo><mo separator="true">,</mo><mi>j</mi><mo stretchy="false">]</mo><mo>⋅</mo><mi>x</mi></mrow><mo stretchy="true">⏟</mo></munder><mrow><mtext>② 单流输出 </mtext><mi>x</mi><mtext> 乘第 </mtext><mi>j</mi><mtext> 个权重后相加</mtext></mrow></munder></mrow><annotation encoding="application/x-tex">\text{residual}_{\text{new}}[:, j, :] = \underbrace{\sum_{i=0}^{3} \text{res\_mix}[:, i, j] \cdot \text{residual}[:, i, :]}_{\text{① 4 条旧流按 } 4\times 4 \text{ 矩阵做线性组合}} \;+\; \underbrace{\text{post\_mix}[:, j] \cdot x}_{\text{② 单流输出 } x \text{ 乘第 } j \text{ 个权重后相加}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord text"><span class="mord">residual</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">new</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mrel">:</span></span><span class="katex-base"><span class="katex-strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:4.4634em;vertical-align:-2.6623em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.1971em;"><span class="pstrut" style="height:3.8011em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">① 4 </span><span class="mord cjk_fallback mtight">条旧流按</span><span class="mord mtight"> </span></span><span class="mord mtight">4</span><span class="mbin mtight">×</span><span class="mord mtight">4</span><span class="mord text mtight"><span class="mord mtight"> </span><span class="mord cjk_fallback mtight">矩阵做线性组合</span></span></span></span></span><span style="top:-3.8011em;"><span class="pstrut" style="height:3.8011em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span class="svg-align" style="top:-1.8754em;"><span class="pstrut" style="height:3.8011em;"></span><span class="katex-stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z"/></svg></span><span class="brace-center" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMidYMin slice"><path d="M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z"/></svg></span><span class="brace-right" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMaxYMin slice"><path d="M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z"/></svg></span></span></span><span style="top:-3.8011em;"><span class="pstrut" style="height:3.8011em;"></span><span class="mord"><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">res_mix</span></span><span class="mopen">[</span><span class="mrel">:</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">i</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">residual</span></span><span class="mopen">[</span><span class="mrel">:</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">i</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span><span class="mclose">]</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.9257em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.6623em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.5224em;vertical-align:-1.7724em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span style="top:-1.3637em;"><span class="pstrut" style="height:3em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">② </span><span class="mord cjk_fallback mtight">单流输出</span><span class="mord mtight"> </span></span><span class="mord mathnormal mtight">x</span><span class="mord text mtight"><span class="mord mtight"> </span><span class="mord cjk_fallback mtight">乘第</span><span class="mord mtight"> </span></span><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mord text mtight"><span class="mord mtight"> </span><span class="mord cjk_fallback mtight">个权重后相加</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span class="svg-align" style="top:-2.042em;"><span class="pstrut" style="height:3em;"></span><span class="katex-stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z"/></svg></span><span class="brace-center" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMidYMin slice"><path d="M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z"/></svg></span><span class="brace-right" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMaxYMin slice"><path d="M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z"/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">post_mix</span></span><span class="mopen">[</span><span class="mrel">:</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.958em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.7724em;"><span></span></span></span></span></span></span></span></span>$</p>
+<ul>
+<li><strong><code>pre</code> 如何合并出单流 <code>x_in</code> 并计算三个 <code>mix</code> 系数</strong>（对应 <code>tf32_hc_prenorm_gemm</code> + <code>MHC_PRE_NORM_KERNEL</code>；参考实现 <code>mhc_pre_delayed_torch</code> 位于 <code>kernels/mhc/torch.py:6-45</code>）：
+  1. <strong>投影 GEMM（<code>tf32_hc_prenorm_gemm</code>）</strong>：将更新后的 4 条流展平为 <code>[T, 20480]</code>，乘以本子层的投影权重 <code>fn</code>（形状 <code>[24, 20480]</code>，即 <code>hc_attn_fn</code> 或 <code>hc_ffn_fn</code>），同时计算每行的平方和 <code>sqrsum</code> 用于 RMS 归一化，每个 token 输出 <strong>24 个数</strong>（<code>4 + 4 + 16</code>）。
+  2. <strong>后处理与四流合并（<code>MHC_PRE_NORM_KERNEL</code>）</strong>：<ul>
+<li>前 <strong>4 个数</strong>经 <code>sigmoid</code> 与缩放偏置，生成留给<strong>下一子层</strong>使用的新 <code>pre_mix [T, 4]</code>；</li>
+<li>中间 <strong>4 个数</strong>经 <code>sigmoid</code> 并乘以 <code>hc_post_alpha=2.0</code>，生成本子层出栈使用的 <code>post_mix [T, 4, 1]</code>；</li>
+<li>最后 <strong>16 个数</strong>重排为 <code>4×4</code> 矩阵，先做 <code>softmax</code> 再执行 <strong>20 轮 Sinkhorn 行列交替归一化</strong>（使每行、每列之和接近 1，保证多流混合数值稳定），生成 <code>res_mix [T, 4, 4]</code>；</li>
+<li>同时用<strong>上一子层传入的旧 <code>pre_mix [T, 4]</code></strong> 对 4 条流做加权求和，并乘以子层入口的 <code>norm_weight</code>（<code>attn_norm</code> 或 <code>ffn_norm</code>）完成 RMSNorm：
+   <pre class="highlight"><code class="language-python">x_in = RMSNorm((pre_mix.unsqueeze(-1) * residual.float()).sum(dim=1), norm_weight)  # [T, 5120]</code></pre></li>
+</ul>
+</li>
+</ul>
+<h3 id="32-attentionsparse-mla-的组成跨层复用与-forward-流程">3.2 Attention：Sparse MLA 的组成、跨层复用与 forward 流程</h3>
+<p>进入 <code>DeepseekV4Attention</code>（<code>attention.py:176</code>）之前，先明确组成 Sparse MLA 的四个部分在代码中的职责——特别是 <strong>SWA（近处滑窗），它没有独立权重，也不单独执行注意力计算，<code>forward</code> 为空函数</strong>：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>组成部分</th>
+<th>代码属性（<code>attention.py</code>）</th>
+<th>是否有独立权重 / 是否计算注意力</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. <code>SWA</code>（近处滑窗）</strong></td>
+<td><code>self.swa_cache_layer</code>（<code>DeepseekV4SWACache</code>，<code>:557</code>；定义于 <code>v1/attention/backends/mla/sparse_swa.py:74</code>）</td>
+<td><strong>无权重，不单独计算注意力</strong>（<code>sparse_swa.py:142</code> 的 <code>def forward(self): ...</code> 为空）。仅作为向 vLLM 申请 128 窗口显存的缓存容器：<code>kv</code> 向量来自 MLA 主投影 <code>fused_wqa_wkv</code>，由 <code>_fused_qnorm_rope_kv_insert</code>（<code>:1011</code>）完成 RoPE 与量化后写入。</td>
+</tr>
+<tr>
+<td><strong>2. <code>Compressor</code>（压缩器）</strong></td>
+<td><code>self.compressor</code>（<code>DeepseekCompressor</code>，<code>:577</code>，仅 4 个 <code>kv_source</code> 层非 <code>None</code>）</td>
+<td><strong>有权重（<code>fused_wkv_wgate</code> + <code>RMSNorm</code>）</strong>。将全量历史 token 压缩为 512 维 latent，写入跨层共享的压缩 KV cache。</td>
+</tr>
+<tr>
+<td><strong>3. <code>Indexer</code>（检索打分器）</strong></td>
+<td><code>self.indexer</code>（<code>DeepseekV4Indexer</code>，<code>:462</code>，仅 8 个 <code>index_source</code> 层非 <code>None</code>）</td>
+<td><strong>有权重（<code>wq_b</code> / <code>weights_proj</code> / <code>wk</code> / <code>k_norm</code>）</strong>。对压缩区历史打分，选出 top-512 下标写入 <code>topk_indices_buffer</code>。</td>
+</tr>
+<tr>
+<td><strong>4. <code>MLA</code>（主注意力）</strong></td>
+<td><code>fused_wqa_wkv / wq_b / wo_a / wo_b</code> + <code>flash_mla_with_kvcache</code> / <code>flash_mla_sparse_fwd</code></td>
+<td><strong>唯一执行注意力计算的模块</strong>。将 <strong>SWA 的 128 条 KV</strong> 与 <strong>Indexer 选出的 512 条压缩 KV</strong> 一并送入<strong>同一个 MLA 算子</strong>，单次完成统一的 softmax 注意力计算。</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="321-双轨缓存与-compress_ratios-的三档语义">3.2.1 双轨缓存与 <code>compress_ratios</code> 的三档语义</h4>
+<p>以生成第 10,000 个 token（历史下标 <code>#0 ~ #9999</code>，<code>pos=9999</code>）为例，先说明上面 SWA 与 Compressor 双轨缓存最容易误解的一点：</p>
+<blockquote>
+<p><strong>问：既然最近 128 个 token（<code>#9872 ~ #9999</code>）已经在 SWA 滑窗里了，那 <code>Compressor</code> 处理的只是滑窗外的 <code>#0 ~ #9871</code> 吗？</strong></p>
+<p><strong>答：不是。<code>Compressor</code> 处理的是从 <code>#0</code> 到 <code>#9999</code> 的全量 10,000 个 token，原因有三点：</strong>
+1. <strong>必须在生成当步实时压缩</strong>：每个 token 只有在经过模型的当前步才有 <code>hidden_states</code>；若等 128 步滑出窗口后再压缩，对应的 <code>hidden_states</code> 已不存在。因此每个 token 在生成当步会<strong>同时</strong>写入本层的 SWA cache 和（<code>kv_source</code> 层的）压缩 KV cache。
+2. <strong>检索范围也是全量 <code>(pos + 1) // compress_ratio</code></strong>：由 <code>v1/attention/backends/mla/indexer.py:1490</code>、<code>:1726</code>（<code>seq_lens // compress_ratio</code>）和 <code>common/ops/cache_utils.py:1093</code>（<code>topk_len = min((pos + 1) // COMPRESS_RATIO, TOP_K)</code>）可见，压缩 KV cache 保存了 <code>#0 ~ #9999</code> 生成的全部 <code>10000 // compress_ratio</code> 条记录，<code>Indexer</code> 也在全部记录中打分选出 512 条。
+3. <strong>已有全量压缩区，为何仍保留 128 的本层 SWA 滑窗？</strong>
+   - 在 <strong><code>2:1</code> 压缩层（L2–L19）</strong>：压缩区将 2 个相邻 token 有损合并为 1 条记录（且总长度为奇数时，末尾未配对的 token 尚不写入压缩 cache，<code>compressor_utils.py:83</code>）；SWA 滑窗保证最近 128 个 token 拥有未合并的逐 token 原始 KV。
+   - 在 <strong><code>1:1</code> 压缩层（L20–L39）</strong>：压缩 KV cache 在 L20–L39 共 20 层之间<strong>共享 L20 的同一份数据</strong>（L21–L39 不写入压缩 KV），而 SWA 滑窗 cache 由<strong>各层独立计算并维护</strong>——因此 L21–L39 通过共享的 L20 压缩区检索远文（512 条），通过本层独立的 SWA 滑窗保留近处上下文（128 条）。</p>
+</blockquote>
+<p>明确双轨关系后，<code>config.json</code> 的 <code>compress_ratios</code> 数组中 <code>0 / 2 / 1</code> 三档的具体行为如下（注意 <strong><code>0</code> 和 <code>1</code> 语义不同</strong>）：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>档位</th>
+<th>层</th>
+<th>生成第 10,000 个 token（<code>#0 ~ #9999</code>）时的行为（详见 <code>compressor.py:175-242</code>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>0</code></strong></td>
+<td>L0–L1（2 层）</td>
+<td><strong>纯滑窗（不启用压缩区，共读 <code>128</code> 条）</strong>：<br>• <strong>本层 SWA 滑窗</strong>：读取最近 128 个 token（<code>#9872 ~ #9999</code>）<br>• <strong>压缩区</strong>：不使用；<code>#0 ~ #9871</code> 不参与计算，不读写压缩 KV cache，也不运行 <code>Indexer</code></td>
+</tr>
+<tr>
+<td><strong><code>2</code></strong></td>
+<td>L2–L19（18 层）</td>
+<td><strong>2:1 压缩 + 检索 top-512（共读 <code>128 + 512 = 640</code> 条）</strong>：<br>• <strong>本层 SWA 滑窗</strong>：保留最近 128 个 token（<code>#9872 ~ #9999</code>）的原始 KV<br>• <strong>压缩区</strong>：<code>Compressor</code> 将 <code>#0 ~ #9999</code> 每 <strong>2 个相邻 token</strong>（<code>(#0,#1)</code>、<code>(#2,#3)</code>…）经门控 <code>wgate</code> 加权合并为 <strong>1 条压缩记录</strong>，共 <strong>5,000 条</strong>；<code>Indexer</code> 从中检索出 <strong>512 条</strong>，与滑窗的 128 条合并计算注意力</td>
+</tr>
+<tr>
+<td><strong><code>1</code></strong></td>
+<td>L20–L39（20 层）</td>
+<td><strong>1:1 压缩 + 检索 top-512（共读 <code>128 + 512 = 640</code> 条，并非纯滑窗）</strong>：<br>• <strong>本层 SWA 滑窗</strong>：保留最近 128 个 token（<code>#9872 ~ #9999</code>）的本层原始 KV<br>• <strong>压缩区</strong>：<code>Compressor</code> 不做两两合并（无 <code>wgate</code>），<code>#0 ~ #9999</code> 每 <strong>1 个 token</strong> 经 <code>wkv + RMSNorm</code> 存为 <strong>1 条压缩记录</strong>，共 <strong>10,000 条</strong>；<code>Indexer</code> 从这 10,000 条中检索出 <strong>512 条</strong>，与本层滑窗的 128 条合并计算注意力</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>config.json</code> 里的 <code>compress_ratios</code> 实际有 <strong>43 项</strong>：前 40 项对应主干，末尾 3 个 <code>0</code> 对应 3 层 DSpark draft，即 draft 层都是纯滑窗。</p>
+<h4 id="322-跨层复用谁真的持有模块三张-source-层表">3.2.2 跨层复用：谁真的持有模块（三张 source 层表）</h4>
+<p>先明确一个前提：<strong>40 层里没有任何一层是跑全量历史的普通 Dense MLA——L0–L1 是只读 128 条的纯 SWA 层，而 L2–L39 这 38 层全部都是读 <code>128 条本层 SWA + 512 条压缩 KV</code> 的 Sparse MLA 层。</strong></p>
+<p>既然 L2–L39 这 38 层都要读「压缩 KV cache」和「top-512 位置索引」来算 Sparse MLA，如果 38 层每层都各自算一遍压缩、各自打分挑一遍 top-512，显存与计算开销过大。因此在 <code>DeepseekV4Attention.__init__</code>（<code>attention.py:431-482</code>、<code>:575-585</code>）中，<strong>只在少数几层创建 <code>self.compressor</code> 和 <code>self.indexer</code> 去刷新缓存与索引，其余层的这两个属性直接设为 <code>None</code>（跳过压缩与检索步骤，算 Sparse MLA 注意力时直接读取前面层刷新的结果）</strong>：</p>
+<pre class="highlight"><code class="language-python"># attention.py:431-482 —— 仅 8 个层创建 self.indexer，其余 32 层为 None
+self.indexer = None
+if self.is_index_source:
+    ...
+    self.indexer = self._indexer_cls(index_k_cache)(...)
+
+# attention.py:575-585 —— 仅 4 个层创建 self.compressor，其余 36 层为 None
+self.compressor = None
+if self.is_kv_source:
+    self.compressor = DeepseekCompressor(...)</code></pre>
+<p>配置与代码中，将 <strong><code>self.compressor</code> / <code>self.indexer</code> 不为 <code>None</code>、负责计算并将结果写入共享缓存的层</strong>称为 <strong><code>source</code> 层</strong>（对应 <code>kv_source_layer_ids</code>、<code>index_source_layer_ids</code>），将属性为 <code>None</code>、直接复用前序结果的层称为 <code>consumer</code>（<code>attention.py:306-309</code>）：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>共享项</th>
+<th>负责计算的 <code>source</code> 层（子模块不为 <code>None</code>）</th>
+<th>直接复用的后续层（子模块为 <code>None</code>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>压缩 KV cache</strong><br>（<code>kv_source_layer_ids</code>）</td>
+<td><strong>L2、L8、L14、L20</strong>（共 4 层）<br>仅这 4 层创建 <code>self.compressor</code> 并写入压缩 KV cache</td>
+<td>L3–L7 复用 L2；L9–L13 复用 L8；L15–L19 复用 L14；<strong>L21–L39 全部复用 L20</strong>（因 L20 是最后一个写入压缩 KV 的层，<code>nvidia/model.py:805</code> 用 <code>cut = max(config.kv_source_layer_ids)</code> 定位 L20，使 L21–L39 在 eager prefill 时只需重放各请求末尾滑窗内的 token）</td>
+</tr>
+<tr>
+<td><strong>top-512 位置索引</strong><br>（<code>index_source_layer_ids</code>）</td>
+<td><strong>L2、L8、L14、L20、L24、L28、L32、L36</strong>（共 8 层）<br>仅这 8 层创建 <code>self.indexer</code>，重新检索 top-512 并写入共享的 <code>topk_indices_buffer</code></td>
+<td>每层后续紧邻的若干层直接复用该索引（如 L25–L27 复用 L24 选出的 top-512）</td>
+</tr>
+<tr>
+<td><strong>粗筛出的 2048 个候选块</strong><br>（<code>candidate_source_layer_id</code>）</td>
+<td><strong>L20</strong>（1 层）<br>L20 的 <code>self.indexer</code> 选出 top-512 的同时，将得分最高的 2048 个块（每块 8 个压缩位置）写入 <code>candidate_block_buffer</code></td>
+<td><strong>L24、L28、L32、L36</strong> 的 <code>self.indexer</code> 不再遍历全量历史，仅在这 2048 个候选块内做二次检索</td>
+</tr>
+</tbody>
+</table></div>
+<p>以相邻的 <strong>L2（<code>source</code> 层）</strong> 与 <strong>L3（复用层，<code>compressor=None, indexer=None</code>）</strong> 对比，即可看清复用层为何仍然是 Sparse MLA 层（只是省去了准备步骤）：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>单层 Attention 内的步骤</th>
+<th>L2（<code>source</code> 层：持有 <code>Compressor</code> 与 <code>Indexer</code>）</th>
+<th>L3（复用层：<code>compressor=None, indexer=None</code>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. 本层 Q 与 SWA 缓存</strong></td>
+<td>计算 L2 的 <code>Q_2</code>（64 头），将最近 128 个 token 写入 <code>L2.swa_cache</code></td>
+<td>计算 L3 的 <code>Q_3</code>（64 头），将最近 128 个 token 写入 <code>L3.swa_cache</code></td>
+</tr>
+<tr>
+<td><strong>2. 压缩 KV cache</strong></td>
+<td><strong>执行 <code>L2.compressor</code></strong>，将压缩记录写入 <code>L2.kv_cache</code></td>
+<td><strong>跳过计算</strong>，通过 <code>compressed_cache_prefix</code> 直接指向 <code>L2.kv_cache</code></td>
+</tr>
+<tr>
+<td><strong>3. 检索 top-512 索引</strong></td>
+<td><strong>执行 <code>L2.indexer</code></strong>，选出 512 个下标写入共享的 <code>topk_indices_buffer</code></td>
+<td><strong>跳过计算</strong>，直接读取 <code>topk_indices_buffer</code> 中 L2 刚写好的 512 个下标</td>
+</tr>
+<tr>
+<td><strong>4. 执行 MLA 注意力核</strong></td>
+<td><strong>运行 Sparse MLA（<code>128 + 512</code>）</strong>：<br>用 <code>Q_2</code> 读取 <code>L2.swa_cache</code>（128 条）+ <code>L2.kv_cache</code> 中的 512 条</td>
+<td><strong>同样运行 Sparse MLA（<code>128 + 512</code>）</strong>：<br>用 <code>Q_3</code> 读取 <code>L3.swa_cache</code>（128 条）+ 同一个 <code>L2.kv_cache</code> 中的同 512 条</td>
+</tr>
+</tbody>
+</table></div>
+<p>结合上表，代码中的三处关键逻辑如下：</p>
+<ul>
+<li><strong>各层如何确定复用的 <code>source</code> 层？</strong> 向下取小于等于当前层号的最大 <code>source</code> 层号（<code>attention.py:343-348</code>）：
+  <pre class="highlight"><code class="language-python">self.kv_source_layer_id = max(s for s in self.kv_source_layers if s &lt;= layer_id)
+self.index_source_layer_id = max(s for s in self.index_source_layers if s &lt;= layer_id)</code></pre>
+  例如 L27 向下查找到最近的 <code>kv_source</code> 为 L20、最近的 <code>index_source</code> 为 L24，因此读取 L20 的压缩 KV、使用 L24 的 top-512 索引。L0–L1 为纯滑窗（<code>compress_ratio == 0</code>），这两个字段均为 <code>None</code>；DSpark 的 3 层 draft 同理（<code>:332-334</code> 通过 <code>layer_id &lt; config.num_hidden_layers</code> 排除 draft 层）。</li>
+<li><strong>为何 8 个 <code>Indexer</code> 层中，仅前 4 个（L2/L8/L14/L20）写入 Indexer K cache？</strong> V4.1 的 <code>Indexer</code> 不从 <code>hidden_states</code> 投影 key，而是直接将本层 <code>self.compressor</code> 输出的 latent 经 <code>wk + k_norm</code> 变换为 key（<code>attention.py:1260-1262</code>）。后 4 个 <code>Indexer</code>（L24/L28/L32/L36）所在层的 <code>self.compressor</code> 为 <code>None</code>，无 latent 可用，因此不创建 <code>wk / k_norm</code> 权重，直接复用 L20 写入的 Indexer K cache 打分，对应代码中的 <code>owns_k=self.is_kv_source</code>（<code>attention.py:472</code>）。</li>
+<li><strong><code>self.compressor is None</code> 不代表不读取压缩 KV。</strong> 它仅表示该层不自行计算和写入压缩 KV；只要 <code>compress_ratio &gt; 0</code>（L2–L39 均满足），计算注意力时都会通过 <code>self.compressed_cache_prefix</code>（<code>:590</code>）读取所属 <code>source</code> 层的压缩 KV。</li>
+</ul>
+<h4 id="323-两级候选在-nv-路径怎么落地">3.2.3 两级候选在 NV 路径怎么落地</h4>
+<p>上表第三行（<code>candidate_source_layer_id = 20</code>）在代码中的具体落点如下：</p>
+<ol>
+<li>父层按层号算出两个布尔量（<code>attention.py:460-461</code>）——<code>is_candidate_source = (layer_id == candidate_source_layer)</code>、<code>uses_candidates = (0 &lt;= candidate_source_layer &lt; layer_id)</code>，只有这两者之一成立时才把共享的 <code>candidate_block_buffer</code> 传给 indexer（<code>:475-481</code>），并置 <code>candidate_write=is_candidate_source</code>。三个字段本身在 <code>:328-330</code> 从 config 读入。</li>
+<li><code>Indexer</code> 再按自己属不属于 L24+ 来选打分算子（<code>attention.py:1359-1398</code>）：
+   - <strong>L2 / L8 / L14 / L20</strong>：走 <code>attn_cls</code>（<code>SparseAttnIndexer</code>，<code>model_executor/layers/sparse_attn_indexer.py:944</code>），对全量历史做 <strong>dense 打分</strong>；其中 L20（<code>candidate_write=True</code>）同时将得分最高的 2048 个块写入 <code>candidate_block_buffer</code>。
+   - <strong>L24 / L28 / L32 / L36</strong>：在开启 <code>attention_config.indexer_sparse_logits</code> 时走 <code>mqa_cls</code>（<code>SparseMQAIndexer</code>，<code>model_executor/layers/sparse_mqa_indexer.py:75</code>），只对那 2048 个候选块打分。这条路<strong>要求 MXFP4 indexer cache</strong>（<code>indexer_kv_dtype='mxfp4'</code>），否则在 <code>:1367</code> 直接报错；没开这个开关时这 4 层仍走 dense 的 <code>SparseAttnIndexer</code>。</li>
+</ol>
+<p>注意这里和其他平台不一样：<strong>NV 路径没有 <code>_select_candidate_blocks</code> / <code>_apply_candidate_mask</code> 这两个函数</strong>，候选的写入与过滤都在 indexer op 内部完成；那两个名字属于 ROCm 的 <code>v1/attention/ops/rocm_aiter_mla_sparse.py</code>。</p>
+<h4 id="324-forward-的四步">3.2.4 forward 的四步</h4>
+<p><code>DeepseekV4Attention.forward</code>（<code>attention.py:659</code>）只有四步，但每一步都藏着设计意图：</p>
+<pre class="highlight"><code class="language-python">attn_out = self._alloc_attn_out(hidden_states.shape[0], hidden_states)
+qr_kv, kv_score, indexer_weights = self._run_parallel_input_projections(hidden_states)
+qr, qr_scale, kv = self._split_qkv_and_norm(qr_kv)
+self._prepare_and_attn_fn(hidden_states, qr, kv, qr_scale, kv_score,
+                          indexer_weights, positions, attn_out)
+return self._o_proj(attn_out, positions)</code></pre>
+<p><strong>第一步先把输出 buffer 预分配好。</strong> 注释写明原因：后面的注意力核跑在 CUDA Graph 的分段断开区（<code>breakable_cudagraph</code>）里，要求输出张量地址固定、原地写入（in-place），所以 MLA 核不返回新张量，而是直接往调用方预先分配好的 <code>[num_tokens, padded_heads, head_dim]</code> 里写。</p>
+<p><strong>第二步是三路并行的输入投影</strong>（<code>attention.py:932</code>）。<code>execute_in_parallel</code> 把最重的 <code>fused_wqa_wkv</code> 留在默认流，另外两个较轻的 GEMM 放到辅助流 0 和 1：</p>
+<pre class="highlight"><code class="language-python">if self.compressor is not None:
+    def compressor_kv_score():
+        return torch.mm(hidden_states, compressor.fused_wkv_wgate.weight.T,
+                        out_dtype=torch.float32)
+    aux_fns[0] = compressor_kv_score
+if self.indexer is not None:
+    def indexer_weights_proj():
+        weights, _ = indexer.weights_proj(hidden_states)
+        return weights
+    aux_fns[1] = indexer_weights_proj
+
+qr_kv, (kv_score, indexer_weights) = execute_in_parallel(
+    lambda: self._fused_wqa_wkv_gemm(hidden_states), aux_fns,
+    self.ln_events[0], self.ln_events[1:3], aux_streams,
+    enable=hidden_states.shape[0] &lt;= envs.VLLM_MULTI_STREAM_GEMM_TOKEN_THRESHOLD)</code></pre>
+<p>三件事值得注意。一是<strong>两个辅助分支都带 <code>is not None</code> 守卫</strong>——不是每层都有 compressor 和 indexer（见 <a href="/articles/dsv41-upstream/#322-%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E8%B0%81%E7%9C%9F%E7%9A%84%E6%8C%81%E6%9C%89%E6%A8%A1%E5%9D%97%E4%B8%89%E5%BC%A0-source-%E5%B1%82%E8%A1%A8">3.2.2 节</a>），没有的层这一路为空。二是<strong>并行只在小 batch 下开启</strong>，受 <code>VLLM_MULTI_STREAM_GEMM_TOKEN_THRESHOLD</code> 阈值控制，大 batch 下单核已能占满 SM。三是这里有一条 <strong>V4.1 相对 V4.0 的结构性差异</strong>，源码注释直接点明：</p>
+<blockquote>
+<p>The v4.1 indexer derives K from the kv-source compressor's latent, so unlike v4.0 there is no indexer K GEMM over hidden_states here.</p>
+</blockquote>
+<p>也就是说 <strong>V4.1 的 indexer K 是从 kv-source compressor 的 latent 导出的，不再单独对 <code>hidden_states</code> 做一次 K 投影</strong>。V4.0 这里有三个 GEMM，V4.1 只剩两个。</p>
+<p><strong>第三步 <code>_split_qkv_and_norm</code>（<code>attention.py:773</code>）把融合投影劈开再各自归一化</strong>，并且在这里决定要不要把量化也融进去：</p>
+<pre class="highlight"><code class="language-python">qr, kv = qr_kv.split([self.q_lora_rank, self.head_dim], dim=-1)
+if self.q_lora_rank % 32 == 0 and self._can_fuse_query_quant:
+    qr_quant, kv = fused_q_kv_rmsnorm_quant(qr, kv, self.q_norm.weight.data,
+                                            self.kv_norm.weight.data, self.eps)
+    return qr_quant, None, kv          # 量化后的 Q + scale，直接传给 wq_b
+qr, kv = fused_q_kv_rmsnorm(qr, kv, ...)   # 否则只归一化</code></pre>
+<p><code>q_lora_rank=1280</code> 能被 32 整除，所以官方配置下只要投影后端支持就会走上面那条融合量化路径，Q 的量化结果和 scale 由 <code>wq_b</code> 与 indexer 的 <code>wq_b</code> 共用，省掉一次重复量化。</p>
+<p><strong>第四步 <code>_prepare_and_attn_fn</code>（<code>attention.py:833-915</code>）把第三步的低秩张量变成完整的 Q/KV、写好全部缓存，最后在 CUDA Graph 的分段断开点（eager break）里完成稀疏注意力。</strong></p>
+<p>先看它在进入断开区之前依次准备了哪三样东西（<code>:856-903</code>）：</p>
+<pre class="highlight"><code class="language-python"># 4.1 主 Q 升维 + 写本层 SWA 滑窗 cache（attention.py:856-860）
+def project_query_and_cache_kv():
+    q = self._wq_b_proj(qr, qr_scale).view(-1, self.n_local_heads, self.head_dim)  # 1280 → 64×512
+    return self._fused_qnorm_rope_kv_insert(q, kv, positions, attn_metadata)       # Q 加 RoPE + kv 写入 SWA cache
+
+# 4.2 若本层有 Compressor（L2/8/14/20），在辅助流上并行算出压缩 latent（:868-879）
+if compressor is not None:
+    q, latent = maybe_execute_in_parallel(
+        project_query_and_cache_kv, lambda: compressor(kv_score, positions), ...)
+else:
+    q = project_query_and_cache_kv()
+
+# 4.3 若本层有 Indexer（8 个 index_source 层），准备 index_q 并写入 Indexer K / 压缩 KV cache（:881-903）
+#     indexer(...) 内部（:1447）：若 owns_k 为真先拿 latent 写 Indexer K cache（_produce_k，:1405），再算 index_q
+if compressor is not None:
+    indexer_result, _ = maybe_execute_in_parallel(
+        prepare_indexer, lambda: compressor.insert_cache(latent, positions, self.rotary_emb), ...)
+else:
+    indexer_result = prepare_indexer()
+index_q, index_q_scale, index_weights_out = indexer_result</code></pre>
+<p>这三步准备完后，所有的输入投影和 cache 写入都已经就绪，最后才调 <code>@eager_break_during_capture</code> 装饰的 <code>_sparse_indexer_and_attn</code>（<code>attention.py:986</code>）。所谓分段捕获（piecewise capture），就是把上面形状固定的线性投影录进 CUDA Graph 静态图以减少 CPU 发射开销，而在遇到动态的稀疏检索和 MLA 主核时暂时跳出图、退回普通逐算子执行（eager 模式）。<code>_prepare_and_attn_fn</code> 在 <code>__init__</code>（<code>attention.py:484</code>）里按 runner 版本二选一绑定：</p>
+<pre class="highlight"><code class="language-python">self._prepare_and_attn_fn = self._prepare_and_attn
+if not vllm_config.use_v2_model_runner:
+    # MRV1's piecewise capture only tolerates the wide eager region
+    self._prepare_and_attn_fn = self._prepare_and_attn_eager</code></pre>
+<p><code>_sparse_indexer_and_attn</code>（<code>attention.py:986</code>）里面只做最后两件事——先让 <code>Indexer</code> 打分挑出 top-512 写进共享的 <code>topk_indices_buffer</code>，再调 <code>forward_mqa</code> 让 MLA 主核读取 SWA cache 和压缩 cache、把结果写进第一步预分配的 <code>out</code> buffer：</p>
+<pre class="highlight"><code class="language-python">if self.indexer is not None and index_q is not None:
+    q_quant = (index_q, index_q_scale) if index_q_scale is not None else index_q
+    self.indexer.indexer_op(hidden_states, q_quant, None, index_weights)
+self.forward_mqa(q, kv, positions, out)</code></pre>
+<p><strong>边界划在这里是有讲究的</strong>：输入投影和 cache 写入留在被捕获的图里，只有稀疏检索和 MLA 跑在 eager 区。源码注释还记了一个坑——MRV1 的 piecewise capture 只能接受「宽」的 eager 区，用窄的那个会让输入投影留在图里从而产出垃圾结果（issue #51430）。</p>
+<h4 id="325-mla-的形状两段低秩--分组输出">3.2.5 MLA 的形状：两段低秩 + 分组输出</h4>
+<p>形状定义在 <code>DeepseekV4Attention.__init__</code>，<code>q_lora_rank</code> / <code>o_lora_rank</code> / <code>head_dim</code> 都从 config 直读：</p>
+<pre class="highlight"><code class="language-text">Q 路：hidden 5120
+  → fused_wqa_wkv（MergedColumnParallelLinear [1280 | 512]，disable_tp）
+     ├─ q_lora 1280 → q_norm RMSNorm(1280) → wq_b：1280 → 64×512
+     └─ kv latent 512 → kv_norm RMSNorm(512)
+KV：单头（num_key_value_heads=1），head_dim 512 = 448 NoPE + 64 RoPE
+
+O 路：attn out 64×512
+  → wo_a：(64×512/8 = 4096) → 8×1024，按 8 组批矩阵乘
+  → wo_b：8×1024 → 5120（RowParallel）</code></pre>
+<p><code>o_lora_rank=1024</code> + <code>o_groups=8</code> 的含义：输出投影不是 <code>64×512→5120</code> 的大矩阵，而是先按 8 组压到 <code>8×1024</code> 的低秩空间再升回 5120。两段低秩（Q 侧 1280、O 侧 1024）与 V4.0 同形态，只是 <code>q_lora_rank</code> 从 1024 变成 1280。</p>
+<p><strong>Q 头数要 padding，且带可学习的 <code>attn_sink</code></strong>：
+- <code>attn_sink</code>（<code>attention.py:359</code> 的 <code>nn.Parameter</code>）是每个 Q 头独享的一个可学习标量偏置（Attention Sink），参与注意力 softmax 的分母计算——当某个头在当前位置不需要关注任何历史 token 时，可以把多余的注意力概率分给这个 sink 槽。
+- FlashMLA 的 FP8 decode 核只支持 <code>h_q ∈ {64, 128}</code>（TP 切分后若不足 64 头会 pad 到 64）。因此 <code>attn_sink</code> 按 <strong>padded 头数</strong>分配、初值填 <code>-inf</code>，加载权重时只填前 <code>n_local_heads</code> 个真实头——多出来的 padding 头保持 <code>-inf</code>，在 softmax 里自然权重为 0。</p>
+<h3 id="33-moe一个类同时服务主干和-draft">3.3 MoE：一个类同时服务主干和 draft</h3>
+<p><code>DeepseekV4MoE</code>（<code>nvidia/model.py:125</code>）本身很薄，它继承 V4.0 的同名类，<code>__init__</code> 里只做一件有意思的事——<strong>按 prefix 里的层号切换专家规模</strong>：</p>
+<pre class="highlight"><code class="language-python">n_routed_experts = config.n_routed_experts          # 384
+n_activated_experts = config.num_experts_per_tok    # 6
+if extract_layer_index(prefix) &gt;= config.num_hidden_layers:
+    n_routed_experts = getattr(config, "dspark_n_routed_experts", 0) or n_routed_experts
+    n_activated_experts = getattr(config, "dspark_num_experts_per_tok", 0) or n_activated_experts
+super().__init__(..., n_routed_experts=n_routed_experts,
+                 n_activated_experts=n_activated_experts,
+                 num_hash_layers=0, image_sentinel_lo=IMAGE_SENTINEL_BASE_ID)</code></pre>
+<p>这就是 <a href="/articles/dsv41-upstream/#12-%E5%85%B3%E9%94%AE%E5%AD%97%E6%AE%B5">1.2 节</a>「draft 层 MoE 规模与主干不同」的落地方式：<strong>同一个类，层号 <code>&gt;= 40</code> 就自动变成 128/top-3</strong>。DSpark 的 3 层 draft 在构图时编号是 <code>layers.40/41/42</code>，正好落进这个分支。<code>num_hash_layers=0</code> 也是在这里写死的——这是「全 40 层 <code>noaux_tc</code>、没有哈希路由」这条结论的源码出处。</p>
+<p>真正的专家执行不在这个文件，而在它继承的 V4.0 基类 <code>DeepseekV4MoE</code>（<code>models/deepseek_v4/nvidia/model.py:661</code>）与 <code>DeepseekV4MegaMoEExperts</code>（同文件 <code>:212</code>）。</p>
+<p><strong>正常情况下 <code>self.ffn(hidden_states, input_ids, mega_gate_metadata)</code> 进去干了哪三步</strong>（<code>models/deepseek_v4/nvidia/model.py:898-994</code>）：</p>
+<pre class="highlight"><code class="language-python"># models/deepseek_v4/nvidia/model.py:898-994
+# 1. 门控打分选出 top-6 专家 ID 与归一化权重（小 batch 走 GateLinear + fused_topk_bias，大 batch 走 bf16_mega_gate）
+if not mega_backend.supports_bf16_mega_gate() or hidden_states.shape[0] &lt;= gate_threshold:
+    router_logits, _ = self.gate(hidden_states)                                  # [T, 384] FP32
+    topk_weights, topk_ids = fused_topk_bias(
+        hidden_states=hidden_states, gating_output=router_logits,
+        scoring_func=self.scoring_func,                                          # "sqrtsoftplus"
+        e_score_correction_bias=self.gate.e_score_correction_bias.data,          # 文本 token 的路由偏置
+        topk=self.n_activated_experts, renormalize=self.renormalize,             # top-6 归一化
+        input_tokens=input_ids, routed_scaling_factor=self.routed_scaling_factor,# 乘上 1.5
+        bias_vl=bias_vl.data if bias_vl is not None else None,                   # 图像 token 的路由偏置
+        image_sentinel_lo=self.image_sentinel_lo if bias_vl is not None else 0,
+    )
+else:
+    topk_weights, topk_ids = mega_backend.bf16_mega_gate(...)                    # 融合门控核（:962-976）
+
+# 2. 路由专家计算（DeepseekV4MegaMoEExperts，:980-985）
+final_hidden_states = self.experts(
+    hidden_states, topk_weights, topk_ids, activation_clamp=float(self.swiglu_limit)
+)
+
+# 3. 加上共享专家输出（若未融进上面的 MegaMoE 核内，则单独算完相加，:987-992）
+if self.shared_experts is not None and not self.experts.has_fused_shared_experts:
+    final_hidden_states += self.shared_experts(hidden_states)
+return final_hidden_states</code></pre>
+<p>这段代码还解释了两个常见问题：
+- <strong>为什么调 <code>self.ffn</code> 还要传 <code>input_ids</code> 进去？</strong> 不是为了哈希路由（V4.1 的 <code>tid2eid</code> 已经是 <code>None</code>），而是为了<strong>多模态图像 token 的路由偏置 <code>bias_vl</code></strong>（<code>:767-774</code>）：门控选 top-6 时要靠 <code>input_ids</code>（或预构建的 <code>mega_gate_metadata.image_token_mask</code>）识别哪些位置是图像占位 token——普通文本 token 加 <code>e_score_correction_bias</code> 选专家，图像 token 改加 <code>bias_vl</code> 选专家。
+- <strong>共享专家（<code>shared_experts</code>）什么时候融进 <code>self.experts</code>、什么时候单独算？</strong> 在 <code>__init__</code>（<code>:830-845</code>）里，只要开了 Sequence Parallel 或 <code>TP == 1</code>（每张 EP 卡都持有完整的共享专家权重），<code>fuse_shared_experts</code> 就为 <code>True</code>，共享专家会直接塞进 <code>DeepseekV4MegaMoEExperts</code> 的 <code>deep_gemm.fp8_fp4_mega_moe</code> 核里跟 384 个路由专家一起算完；只有在未开 SP 的多卡 TP 下，才退回第 3 步单独调 <code>self.shared_experts(hidden_states)</code> 再相加。</p>
+<p><strong>另一条容易误以为默认开启的分支：MoE 延迟归约（<code>defer_finalize</code>）。</strong> 在 <code>DecoderLayer.forward</code> 调 MoE 时（<code>nvidia/model.py:618-622</code>），代码写了一个分支：如果 <code>self.fuse_mhc_all_reduce and self.ffn.defers_finalize(x.shape[0])</code> 为真，就不走普通的 <code>self.ffn(...)</code>，而是走 <code>self.ffn.forward_unfinalized(x, input_ids)</code>——故意不在本层末尾做专家输出的归约（finalize / all-reduce），而是返回一个半成品 <code>MoEOutput</code>（所以层间 <code>x</code> 的类型标注是 <code>torch.Tensor | MoEOutput</code>），推迟到<strong>下一层开头的第一个 mHC 边界</strong>跟那里的通信合并做（Engram 层的前一层 L0/L13 因下一层入口要先独立跑 <code>mhc_post_tilelang</code>，在 <code>:797</code> 被排除）。</p>
+<p>但看 <code>defer_finalize</code>（<code>nvidia/model.py:154</code>，判定入口 <code>defers_finalize</code> 在 <code>:176</code>，未归约执行入口 <code>forward_unfinalized</code> 在 <code>:182</code>）的启用条件，它比看上去严格得多：</p>
+<pre class="highlight"><code class="language-python">experts_cls = getattr(self.experts.routed_experts.quant_method, "experts_cls", None)
+if (experts_cls is TrtLlmMxfp4ExpertsModular
+        and self.experts.routed_scaling_factor == 1.0):
+    moe_config.defer_moe_finalize(MHC_OVERLAP_MAX_TOKENS)</code></pre>
+<p>两个条件都要满足：专家实现必须是 <code>TrtLlmMxfp4ExpertsModular</code>（注释解释了原因——只有这个模块化实现能在 GEMM2 之后停下来），而且 <strong><code>routed_scaling_factor</code> 必须等于 1.0</strong>。</p>
+<p>官方 checkpoint 的 <code>routed_scaling_factor</code> 是 <strong>1.5</strong>（<code>models/deepseek_v4/nvidia/model.py:694</code> 直接 <code>getattr(config, "routed_scaling_factor", 1.0)</code> 读进来），所以<strong>这个条件不成立，官方配置下延迟 finalize 不会被打开</strong>，<code>defers_finalize()</code> 恒为 <code>False</code>，<code>forward_unfinalized</code> 分支走不到。讲这条优化时要带上这个前提，否则容易让人以为它是默认开启的。</p>
+<h3 id="34-engramn-gram-哈希查表与门控注入">3.4 Engram：N-gram 哈希查表与门控注入</h3>
+<p><strong>Engram 的设计目的（解耦记忆与计算）</strong>：在标准 Transformer 中，浅层网络需要消耗大量 Attention 与 FFN 算力去拼合局部子词（subword n-grams，如固定词组、专有名词、代码常见片段）并记忆高频静态搭配。V4.0 曾尝试把前 3 层 MoE 改为按单 token ID 查表路由（<code>tid2eid</code>），但只能看单个 token 且仍需执行专家矩阵乘；V4.1 取消了 <code>tid2eid</code>，改在 <strong>L1 和 L14</strong> 挂载 <strong>Engram</strong> 模块（与 Qwen 新架构中的 PLE / N-gram Embedding、LongCat-Flash 的 N-gram Embedding 同属「大表查表扩充容量、零算力开销」的设计）：</p>
+<ul>
+<li><strong>参数量极大，但每步计算量极小</strong>：<code>config.json</code> 中 L1 和 L14 的 Engram 嵌入表分别有 <strong>3.84 亿行</strong>（<code>engram_num_embeddings = [384006168, 384016682]</code>，<code>engram_head_dim = 256</code>，单表约 983 亿参数）；但每个 token 每次只需按哈希下标直接取出 <strong>24 行</strong>（<code>24 × 256 = 6144</code> 维），且整张大表支持直接放在主机 CPU 内存中（<code>cpu_offload</code>），通过异步流预取隐藏延迟。</li>
+</ul>
+<p>实现全部位于 <code>models/deepseek_v41/common/engram.py</code>，分三步完成：</p>
+<ol>
+<li><strong>词表归一与 24 列质数桶哈希（<code>NgramHashState.forward</code>，<code>engram.py:520</code> → <code>_hash_ids_kernel</code>，<code>:288</code>）</strong>
+   - 先通过 <code>token_map</code>（<code>:14-16</code>）将 129,280 的原始 token ID 映射为 99,092 的规范化 ID（<code>engram_compressed_vocab_size=99092</code>，合并大小写与前导空白等价词）。
+   - 对每个位置 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span></span></span></span>，结合前 3 个位置 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>p</mi><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mi>p</mi><mo>−</mo><mn>2</mn><mo separator="true">,</mo><mi>p</mi><mo>−</mo><mn>3</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(p-1, p-2, p-3)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mclose">)</span></span></span></span> 的 token 组成 <strong>2-gram、3-gram、4-gram</strong>（共 <code>max_ngram_size - 1 = 3</code> 种长度）；每种长度用 <strong>8 个哈希头</strong>（<code>engram_n_heads=8</code>）分别做奇整数乘法哈希并对互不相同的质数取模（<code>EngramLayout</code>，<code>:208-243</code>，每个桶约 1600 万行，24 个桶互不重叠拼成 3.84 亿行），产出每个位置 <strong>24 个表行下标</strong> <code>engram_hashes [T, 24]</code>。</li>
+<li><strong>进层前批量查表与异步预取（<code>EngramBatch.prepare_embeddings</code>，<code>engram.py:1455</code> → <code>_engram_lookup_kernel</code>，<code>:639</code>）</strong>
+   - 在进入第 0 层之前（<code>nvidia/model.py:983</code>），一次性将 L1 和 L14 的 24 列嵌入向量取出（<code>[T, 24, 256]</code> 展平为 <code>[T, 6144]</code>）。若开启 <code>cpu_offload</code>，则在 <code>engram_prefetch_stream</code> 上通过 UVA 从锁页主机内存异步拷贝到 GPU 暂存区 <code>staged_rows</code>。</li>
+<li><strong>投影与四流门控注入（<code>Engram.forward</code>，<code>engram.py:1676</code> → <code>_fused_engram_post_wkv_kernel</code>，<code>:1186-1275</code>）</strong>
+   - 跑到 L1 和 L14 入口时，先将查出的 <code>[T, 6144]</code> 向量过线性层 <code>self.wkv</code>（<code>:1555</code>，<code>6144 → (4 + 1) × 5120</code>），切分为 <strong>4 个流的 <code>key [T, 4, 5120]</code></strong> 和 <strong>1 个共享的 <code>value [T, 5120]</code></strong>。
+   - 随后在 <code>_fused_engram_post_wkv_kernel</code>（<code>:1247-1274</code>）中，将每条残差流 <code>hidden[:, h, :]</code> 与对应的 <code>key[:, h, :]</code> 做带可学习权重 <code>q_weight / k_weight</code> 的 RMS 归一化点积，经 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>signed_sqrt</mtext><mo stretchy="false">(</mo><mtext>dot</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{signed\_sqrt}(\text{dot})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">signed_sqrt</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">dot</span></span><span class="mclose">)</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>sigmoid</mtext></mrow><annotation encoding="application/x-tex">\text{sigmoid}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">sigmoid</span></span></span></span></span> 得到门控标量 <code>gate</code>，按 <code>hidden + gate * value</code> 注入四条残差流（图像占位 token 的 <code>token_mask</code> 为 <code>False</code>，<code>gate</code> 强制置 0）。</li>
+</ol>
+<h3 id="35-dspark3-层半自回归投机草稿模型">3.5 DSpark：3 层半自回归投机草稿模型</h3>
+<p>实现位于 <code>models/deepseek_v41/nvidia/dspark.py</code>（复用 <code>model_executor/models/qwen3_dspark.py</code> 的基础头组件）。与前代逐 token 串行递推的经典 MTP 不同，DSpark 是一个<strong>单步并行提案 <code>dspark_block_size = 5</code> 个 token 的半自回归草稿模型</strong>：</p>
+<ol>
+<li><strong>融合主干末三层隐状态（<code>combine_hidden_states</code>，<code>dspark.py:161-166</code>）</strong>
+   - 主干 forward 时采集 <code>dspark_target_layer_ids = [37, 38, 39]</code> 三层的四流均值隐状态（见 2.2 / 2.3 节的 <code>previous_aux</code>），拼接为 <code>[T, 3 × 5120]</code> 后经 <code>main_proj</code>（<code>15360 → 5120</code>）与 <code>main_norm</code> 融合为 <code>main_x [T, 5120]</code>（<code>:102-110</code>）。
+   - 同时由 <code>precompute_and_store_context_kv</code>（<code>:169-199</code>）直接用 <code>main_x</code> 算出 3 个草稿层的上下文 SWA KV 并写入各草稿层的滑窗缓存。</li>
+<li><strong>3 层轻量化 Decoder 循环（<code>DSparkDeepseekV4Model.forward</code>，<code>dspark.py:201-251</code>）</strong>
+   - 共享主干的 <code>embed_tokens</code> 与 <code>lm_head</code>（<code>has_own_embed_tokens = False</code>，<code>:283-284</code>），包含 3 层 <code>DeepseekV4DecoderLayer</code>（构图编号 <code>layers.40/41/42</code>，checkpoint 权重前缀 <code>mtp.{0,1,2}.*</code>）。
+   - 每层均为<strong>纯滑窗注意力</strong>（<code>compress_ratios</code> 末尾三项为 <code>0</code>，且块内 5 个草稿位置之间非因果可见）+ <strong>小号 MoE</strong>（128 个路由专家选 top-3，见 <a href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft">3.3 节</a>）。</li>
+<li><strong>Markov 头与置信度头输出（<code>dspark.py:145-156</code>）</strong>
+   - 3 层循环结束后同样经 <code>mhc_post_tilelang</code> + <code>hc_collapse_triton</code> 加权合并回单流 <code>[T, 5120]</code>（<code>:242-248</code>），接 <code>DSparkMarkovHead</code>（<code>dspark_markov_rank = 256</code>）与 <code>DSparkConfidenceHead</code> 生成 5 个草稿 token 提案，交由 40 层主干在下一 step 一次验证。</li>
+</ol>
+<hr>
+<h2 id="4-量化mxfp8-线性--mxfp4-专家">4. 量化：MXFP8 线性 + MXFP4 专家</h2>
+<p>先解释一下这两个格式名：<strong>MXFP8</strong> 和 <strong>MXFP4</strong> 是 NVIDIA Blackwell（SM100）硬件原生支持的<strong>微缩放（Microscaling）低比特格式</strong>。前代 DeepSeek-V3/V4.0 常用的是 <code>[128, 128]</code> 大块共享一个 FP32 缩放因子（block-FP8）；而 MX 格式把粒度缩到了<strong>每 32 个元素</strong>（或 <code>[32, 32]</code> 块）共享一个 1 字节的 <strong><code>ue8m0</code> 缩放因子</strong>（无符号、8 位指数、0 位尾数，只存 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">2^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6644em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span> 幂次缩放）。</p>
+<p>实现全部在 <code>models/deepseek_v41/quant_config.py</code> 的 <code>DeepseekV4FP8Config</code>（<code>:37</code>，继承通用 <code>Fp8Config</code>）。</p>
+<p>官方 <code>quantization_config</code> 是 <code>quant_method="fp8"</code> + <code>weight_block_size=[32,32]</code> + <code>scale_fmt="ue8m0"</code> + <code>expert_dtype="fp4"</code>。</p>
+<p>分派逻辑：<code>is_scale_e8m0 = (expert_dtype == "fp4")</code>；当 <code>weight_block_size == [32,32]</code> 且 <code>is_scale_e8m0</code> 时，线性层拿到 <code>ModelOptLinearMethod(QuantSpec(weight=kMxfp8Static, activation=kMxfp8Dynamic))</code>——也就是 <strong>MXFP8</strong>，而不是 V4.0 那套 <code>[128,128]</code> block-FP8。专家侧用 <code>Mxfp4MoEMethod</code>。</p>
+<p>这个分派还决定线性层在 vLLM 内部注册的 scale 属性名叫什么（加载权重时，<code>nvidia/model.py:1548</code> 的 <code>hf_to_vllm_mapper</code> 要靠这个属性名把 checkpoint 里的 scale 张量映射进对应的层）：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>路径</th>
+<th>线性层方法</th>
+<th>scale 参数名</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MXFP8（<code>[32,32]</code> + fp4 experts）</td>
+<td><code>ModelOptLinearMethod</code></td>
+<td><code>weight_scale</code></td>
+</tr>
+<tr>
+<td>block-FP8</td>
+<td>—</td>
+<td><code>weight_scale_inv</code></td>
+</tr>
+<tr>
+<td>专家侧 MXFP4</td>
+<td><code>Mxfp4MoEMethod</code></td>
+<td><code>w{1,2,3}_weight_scale</code>（无 <code>_inv</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="41-fp4-专家按层再分-nvfp4--mxfp4">4.1 fp4 专家按层再分 NVFP4 / MXFP4</h3>
+<p><code>expert_dtype == "fp4"</code> 之后，专家层还会按层判断走 NVFP4 还是原生 MXFP4——<code>_is_nvfp4_expert_layer</code>（<code>quant_config.py:111</code>），配合 <code>_modelopt_ignore</code>（<code>:61</code> 初始化）与 <code>_EXPERTS_LAYER_RE</code>（<code>:29</code>）；调用点在 <code>get_quant_method</code>（<code>:221</code>）：</p>
+<pre class="highlight"><code class="language-python">def _is_nvfp4_expert_layer(self, prefix: str) -&gt; bool:
+    if self.moe_quant_algo != "NVFP4":
+        return False
+    match = _EXPERTS_LAYER_RE.search(prefix)      # layers.{i}.ffn.experts
+    if match is None or not self._modelopt_ignore:
+        return True
+    ...
+    return not any(fnmatch.fnmatchcase(name, p) for p in self._modelopt_ignore)</code></pre>
+<ul>
+<li><strong>官方 checkpoint 不触发这条分支</strong>：官方 <code>quantization_config</code> 没有 <code>moe_quant_algo</code> 字段，函数第一行直接返回 <code>False</code>，<strong>全部专家走原生 MXFP4</strong>。</li>
+<li><strong>NVFP4 只针对 ModelOpt 重新导出的 checkpoint</strong>：ModelOpt 的 NVFP4 导出会把 <code>ignore</code> 列表中的专家保持为原生 MXFP4，典型就是随 checkpoint 打包的 draft 层。所以这类 checkpoint 里可能<strong>两种专家量化并存</strong>。</li>
+<li>draft 层在构图时叫 <code>layers.{num_hidden_layers + k}</code>，但 checkpoint 里命名是 <code>mtp.{k}</code>，所以判断时要先把层号换算回 <code>mtp.*</code> 再去匹配 ignore 模式。</li>
+</ul>
+<p>讲「MXFP4 专家」时可以补一句限定：<strong>这是官方 checkpoint 的格式；是否走 NVFP4 取决于 checkpoint 的量化元数据，不是模型结构决定的</strong>。</p>
+<h3 id="42-其余配套约束">4.2 其余配套约束</h3>
+<ul>
+<li><strong>Quark checkpoint 不由本 config 认领</strong>：<code>override_quantization_method</code>（<code>quant_config.py:164</code>）遇到 <code>quant_method == "quark"</code> 直接返回 <code>None</code>，交给 <code>QuarkConfig</code> 按层分派，以保留 Quark 的 per-layer scheme。</li>
+<li><strong>Engram 的 fp8 表有单独重路由规则</strong>：<code>embed.weight → embed_tokens.weight</code> 的后缀规则会改表名但不改 scale 名，所以 mapper 显式把 <code>engram.embed.scale</code> 路由到 <code>engram.embed_tokens.weight_scale_inv</code>。</li>
+<li><strong>MegaMoE 的硬门槛</strong>（继承 V4.0）：<code>expert_dtype</code> 必须 fp4、必须开 EP、<code>scoring_func</code> 必须 <code>sqrtsoftplus</code>，否则 <code>DeepseekV4Model.__init__</code> 直接报错。</li>
+<li><strong>block-FP8 的 shared expert 要补 padding</strong>：把 intermediate 轴按 <code>TP × block</code> 向上取整补零，让标准 TP loader 能均匀切（尾部 rank 落在零 pad 上）；SP 或未量化时不需要。</li>
+</ul>
+<hr>
+<h2 id="5-prefill--decode-与-kernel-速查">5. Prefill / Decode 与 kernel 速查</h2>
+<p>本章描述缺省的 <strong>FlashMLA 路径</strong>（<code>nvidia/flashmla.py</code> 的 <code>DeepseekV4FlashMLAAttention</code>）。其余三个后端见 <a href="/articles/dsv41-upstream/#62-%E5%9B%9B%E4%B8%AA-attention-%E5%90%8E%E7%AB%AF%E7%B1%BB">6.2 节</a>。</p>
+<h3 id="51-组件--kernel-总表">5.1 组件 → kernel 总表</h3>
+<p>「Python 入口」一列给的是可直接跳转的 <code>文件:行号</code>，路径相对 <code>vllm/</code>。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>Python 入口</th>
+<th>Kernel / Op</th>
+<th>Prefill</th>
+<th>Decode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>mHC 首层</td>
+<td><code>DeepseekV4DecoderLayer.forward</code><br><code>models/deepseek_v41/nvidia/model.py:455</code></td>
+<td><code>mhc_pre_delayed_tilelang</code>（2D 用 broadcast 权重 / 3D 用原权重）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>mHC 层间</td>
+<td>同上</td>
+<td><code>mhc_shifted_post_pre_deep_gemm</code>（<code>nvidia/ops/mega_mhc.py:47</code>，SM100 + <code>hidden%1024==0</code>）否则 <code>mhc_fused_post_pre_delayed_tilelang</code></td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>mHC 末层</td>
+<td><code>DeepseekV4Model._collapse</code><br><code>models/deepseek_v41/nvidia/model.py:1138</code></td>
+<td><code>mhc_post_tilelang</code> + <code>hc_collapse_triton(hidden, pre_mix)</code></td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Engram 查表</td>
+<td><code>EngramBatch.prepare_embeddings</code><br><code>models/deepseek_v41/common/engram.py:1455</code></td>
+<td><code>_engram_lookup_kernel</code>（<code>engram.py:639</code>），CPU offload 时走独立 prefetch stream</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Engram 注入</td>
+<td><code>Engram.forward</code><br><code>models/deepseek_v41/common/engram.py:1676</code></td>
+<td><code>_fused_engram_post_wkv_kernel</code>（<code>engram.py:1186</code>）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>n-gram 哈希</td>
+<td><code>NgramHashState.forward</code><br><code>models/deepseek_v41/common/engram.py:520</code></td>
+<td><code>_hash_ids_kernel</code>（<code>:288</code>）/ <code>_write_hash_cache_kernel</code>（<code>:253</code>）</td>
+<td>全批算一次</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Compressor</td>
+<td><code>DeepseekCompressor.forward</code><br><code>models/deepseek_v41/compressor.py:250</code></td>
+<td><code>fused_save_compress_norm</code>（<code>compressor.py:283</code> 调用，存状态+池化+RMSNorm 一个 Triton 核）</td>
+<td>写压缩 KV</td>
+<td>滑窗增量</td>
+</tr>
+<tr>
+<td>压缩 cache 插入</td>
+<td><code>DeepseekCompressor.insert_cache</code><br><code>models/deepseek_v41/compressor.py:297</code></td>
+<td><code>rope_quant_insert</code>（<code>common/ops/fused_compress_quant_cache.py:224</code>）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>SWA cache 插入 + Q RoPE</td>
+<td><code>_fused_qnorm_rope_kv_insert</code><br><code>models/deepseek_v41/attention.py:1011</code></td>
+<td><code>fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert</code>(uint8) / <code>..._full_cache_bf16_insert</code> / <code>..._full_cache_fp8_insert</code></td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Indexer K</td>
+<td><code>DeepseekV4Indexer._produce_k</code><br><code>models/deepseek_v41/attention.py:1405</code></td>
+<td><code>indexer_k_norm_rope_store</code>（<code>common/ops/indexer_k_store.py:29</code>）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Indexer Q</td>
+<td><code>DeepseekV4Indexer.forward_q</code><br><code>models/deepseek_v41/attention.py:1439</code></td>
+<td><code>fused_indexer_q_rope_quant</code></td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>Indexer 打分</td>
+<td><code>SparseAttnIndexer</code>（<code>model_executor/layers/sparse_attn_indexer.py:944</code>）或 <code>SparseMQAIndexer</code>（<code>sparse_mqa_indexer.py:75</code>）</td>
+<td>DeepGEMM <code>fp8_fp4_mqa_logits</code> / <code>fp8_fp4_paged_mqa_logits</code></td>
+<td>dense</td>
+<td>paged</td>
+</tr>
+<tr>
+<td>候选块</td>
+<td><code>DeepseekV4Indexer.__init__</code> 按 <code>candidate_write</code> 分派<br><code>models/deepseek_v41/attention.py:1359-1398</code></td>
+<td>由 indexer op 内部处理（见 <a href="/articles/dsv41-upstream/#323-%E4%B8%A4%E7%BA%A7%E5%80%99%E9%80%89%E5%9C%A8-nv-%E8%B7%AF%E5%BE%84%E6%80%8E%E4%B9%88%E8%90%BD%E5%9C%B0">3.2.3 节</a>），NV 路径没有独立的选择/掩码函数</td>
+<td>分 chunk</td>
+<td>整批</td>
+</tr>
+<tr>
+<td>短上下文 top-k</td>
+<td><code>DeepseekV4Indexer.forward</code><br><code>models/deepseek_v41/attention.py:1470</code></td>
+<td><code>_fill_short_context_topk_indices</code>（<code>attention.py:104</code>，全选）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>主注意力 decode</td>
+<td><code>DeepseekV4FlashMLAAttention._forward_decode</code><br><code>models/deepseek_v41/nvidia/flashmla.py:167</code></td>
+<td><code>flash_mla_with_kvcache</code>（<code>:230</code> 调用；tile_sched_swaonly / c1a / c2a）</td>
+<td>—</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>主注意力 prefill</td>
+<td><code>..._forward_prefill</code><br><code>models/deepseek_v41/nvidia/flashmla.py:248</code></td>
+<td><code>dequantize_and_gather_k_cache</code>（<code>common/ops/cache_utils.py:772</code>）→ <code>combine_topk_swa_indices</code>（<code>:925</code>）→ <code>flash_mla_sparse_fwd</code></td>
+<td>✓（<code>PREFILL_CHUNK_SIZE=4</code> 分块）</td>
+<td>—</td>
+</tr>
+<tr>
+<td>O 投影</td>
+<td><code>_o_proj</code><br><code>models/deepseek_v41/nvidia/flashmla.py:63</code>（基类 <code>attention.py:248</code>）</td>
+<td><code>dsv41_o_proj</code>（<code>nvidia/ops/o_proj.py:63</code>）/ <code>deep_gemm_fp8_o_proj</code>（逆 RoPE + wo_a + wo_b 融合 FP8 einsum）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>MoE 专家</td>
+<td><code>DeepseekV4MegaMoEExperts</code><br><code>models/deepseek_v4/nvidia/model.py:212</code></td>
+<td><code>deep_gemm.fp8_fp4_mega_moe</code> + <code>prepare_megamoe_inputs</code>（<code>deepseek_v4/nvidia/ops/prepare_megamoe.py:206</code>）</td>
+<td>同</td>
+<td>同</td>
+</tr>
+<tr>
+<td>路由</td>
+<td><code>fused_topk_bias</code><br><code>model_executor/layers/fused_moe/router/fused_topk_bias_router.py:146</code></td>
+<td><code>_moe_C.topk_softplus_sqrt</code></td>
+<td>同</td>
+<td>同</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="52-flashmla-的-prefill--decode-形态差">5.2 FlashMLA 的 Prefill / Decode 形态差</h3>
+<p><strong>Decode 单核完成计算。</strong> 注意参数分工：主 <code>k_cache</code> 传入 <strong>SWA cache</strong>，压缩 cache 通过 <code>extra_k_cache</code> 传入，输出通过 <code>out=</code> 原地写入（<code>nvidia/flashmla.py:230</code>）：</p>
+<pre class="highlight"><code class="language-python">out, _ = flash_mla_with_kvcache(
+    q=q,
+    k_cache=swa_cache,                                 # 滑窗
+    block_table=None,
+    head_dim_v=512,
+    tile_scheduler_metadata=tile_metadata,             # 按 compress_ratio 选
+    cache_seqlens=None,
+    is_fp8_kvcache=True,
+    indices=swa_indices,
+    topk_length=swa_lens,
+    softmax_scale=self.scale,
+    attn_sink=self.attn_sink,
+    extra_k_cache=kv_cache if not swa_only else None,  # 压缩 KV（可能是别人的）
+    extra_indices_in_kvcache=topk_indices,
+    extra_topk_length=topk_lens,
+    out=output.unsqueeze(1),
+)</code></pre>
+<p>tile scheduler 按本层 <code>compress_ratio</code> 三选一，同类型的层在一个 decode step 内共享一份 <code>FlashMLASchedMeta</code>——第一次调用触发核内 planner，后续同类型层看到 <code>have_initialized=True</code> 就跳过。这也是为什么 <code>sparse_mla.py</code> 的 <code>DeepseekV41SparseSWAMetadataBuilder</code> 要按 V4.1 的层表重算 plan 集合：共享的 builder 默认按 V4.0 的 1/4/128 分类，V4.1 的 0/1/2 对不上。</p>
+<p>非 SWA-only 层还要把 indexer 写的<strong>本地</strong>索引转成全局（<code>compute_global_topk_indices_and_lens</code>），压缩页的 block size 是 <code>block_size // compress_ratio</code>。</p>
+<p><strong>Prefill 是「gather 后 sparse」。</strong> 按 <code>PREFILL_CHUNK_SIZE=4</code>（<code>attention.py:200</code> 的 ClassVar）分块，每块：</p>
+<ol>
+<li>在 workspace 里把选中的压缩 KV <strong>反量化</strong> gather 成稠密 bf16（<code>dequantize_and_gather_k_cache</code>，offset 0）；</li>
+<li>再把 SWA KV gather 到同一块 workspace 的 <code>offset=chunk_N</code> 之后；</li>
+<li><code>combine_topk_swa_indices</code> 合并 top-k 索引与 SWA 索引。VL 场景还要带上 <code>left_visible</code> / <code>right_visible</code> 和 <code>max_image_tokens</code>——图像 span 内部是双向可见的，会加宽索引行；</li>
+<li><code>flash_mla_sparse_fwd</code>。</li>
+</ol>
+<p>workspace 宽度 <code>combined_topk = round_up(top_k + window_size + max_image_tokens, 128)</code>。注意 <code>has_compressed = not swa_only</code>：V4.1 里 <strong>ratio-1 层也要 gather 全长压缩区</strong>，只有 ratio-0 层是纯 SWA。</p>
+<h3 id="53-cache-记录布局">5.3 cache 记录布局</h3>
+<p>定义在 <code>common/ops/cache_utils.py</code> 顶部注释与常量，写入分派在 <code>common/ops/fused_compress_quant_cache.py</code>（按字节宽选 kernel）：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>记录</th>
+<th>字节</th>
+<th>构成</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V4（旧）</td>
+<td>584 B（页 576 B）</td>
+<td>448 fp8 e4m3 NoPE + 64 bf16 RoPE，再 7 个 64 维 UE8M0 scale + 1 字节 pad</td>
+</tr>
+<tr>
+<td><strong>V4.1</strong></td>
+<td><strong>528 B</strong>（页对齐 512 B）</td>
+<td>512 维全部 fp8 e4m3（含 RoPE），再 16 个 UE8M0 scale</td>
+</tr>
+<tr>
+<td>V4.1 NVFP4</td>
+<td>288 B</td>
+<td>仅用于压缩区（<code>nvidia/flash_mla_mega_attn.py</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>attention.py:513</code> 的 <code>swa_bytes_per_token = 528 if self.kv_mxfp8 else 584</code> 是这条分派的开关。</p>
+<p>Indexer K cache 的每位置字节数由 <code>attention.py</code> 的 <code>_indexer_k_cache_head_dim</code>（<code>:92</code>）按 <code>use_fp4_kv</code> 分支给出——MXFP4 变体是 <code>index_head_dim//2 + index_head_dim//MXFP4_BLOCK_SIZE</code> = <strong>68 B</strong>（64 packed 值 + 4 UE8M0 scale），FP8 路径是 <code>index_head_dim + index_head_dim//128*4</code> = <strong>132 B</strong>（128 fp8 值 + 4 fp32 scale）。</p>
+<h3 id="54-后端与开关">5.4 后端与开关</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>开关</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>attention backend</td>
+<td>见 <a href="/articles/dsv41-upstream/#62-%E5%9B%9B%E4%B8%AA-attention-%E5%90%8E%E7%AB%AF%E7%B1%BB">6.2 节</a>的四个类与缺省规则；入口 <code>_select_dsv4_attn_cls</code></td>
+</tr>
+<tr>
+<td><code>--kv-cache-dtype</code></td>
+<td><code>fp8_ds_mla</code>（UE8M0 uint8，见 5.3 节）vs <code>auto</code>/<code>bf16</code>/<code>fp8</code> plain row</td>
+</tr>
+<tr>
+<td><code>--kernel-config moe_backend</code></td>
+<td><code>deep_gemm_mega_moe</code> / <code>flashinfer_moe_ep_mega_*</code> / 其他 → FusedMoE</td>
+</tr>
+<tr>
+<td><code>VLLM_MULTI_STREAM_GEMM_TOKEN_THRESHOLD</code></td>
+<td>token 数 ≤ 阈值才开多流输入 GEMM</td>
+</tr>
+<tr>
+<td><code>VLLM_MOE_SKIP_PADDING</code></td>
+<td>padding token 的 topk 置 -1 跳过路由</td>
+</tr>
+<tr>
+<td><code>attention_config.indexer_sparse_logits</code></td>
+<td>候选消费层是否只对候选块打分（见 <a href="/articles/dsv41-upstream/#323-%E4%B8%A4%E7%BA%A7%E5%80%99%E9%80%89%E5%9C%A8-nv-%E8%B7%AF%E5%BE%84%E6%80%8E%E4%B9%88%E8%90%BD%E5%9C%B0">3.2.3 节</a>）。开启要求 <code>indexer_kv_dtype='mxfp4'</code></td>
+</tr>
+<tr>
+<td>engram config</td>
+<td><code>cpu_offload</code>（pinned host + UVA）、<code>dp_shared_memory</code>（节点内 DP 共享一份表，要求 <code>cpu_offload=True</code> 且 engram DP size &gt; 1）；见 <code>common/engram.py</code> 的 <code>can_share_engram_tables</code> 与 <code>DPSharedEngramStorage</code></td>
+</tr>
+<tr>
+<td>计算能力</td>
+<td>sparse-MLA backend 只支持 <strong>SM 9 / 10</strong>（<code>supports_compute_capability</code>，<code>sparse_mla.py:124</code>，内部 <code>capability.major in [9, 10]</code>）；mega attention 核仅 SM100 有实例化（<code>sparse_mla.py:243</code> 注释，判定在 <code>:262</code>）；<code>mega_mhc</code> 只在 SM100 家族（<code>nvidia/ops/mega_mhc.py:17</code>）</td>
+</tr>
+<tr>
+<td>kernel block size</td>
+<td><code>get_supported_kernel_block_sizes</code>（<code>sparse_mla.py:89</code>，mega attention 后端另有一份在 <code>:258</code>）返回 <code>64 if is_device_capability_family(90) else 128</code></td>
+</tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="6-代码地图查阅用">6. 代码地图（查阅用）</h2>
+<p><strong>查找实现时需先注意两点目录位置：</strong></p>
+<ol>
+<li><strong>模型代码不在 <code>vllm/model_executor/models/</code></strong>，而在 <strong><code>vllm/models/deepseek_v41/</code></strong>，按平台分 <code>common/</code>（跨平台）、<code>nvidia/</code>、<code>amd/</code> 三个子目录。本文只讲 <code>common/</code> + <code>nvidia/</code>。</li>
+<li><strong>有三类实现不在 <code>deepseek_v41/</code> 目录里</strong>：MoE 专家主体在 <code>deepseek_v4/</code>（V4.1 直接继承 V4.0），mHC 的计算核在 <code>model_executor/kernels/mhc/</code>，indexer 打分 op 在 <code>model_executor/layers/</code>。去 <code>deepseek_v41/</code> 里找这三样会找不到。</li>
+</ol>
+<h3 id="61-模块--文件">6.1 模块 → 文件</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>结构模块</th>
+<th>文件</th>
+<th>主要符号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>配置类</td>
+<td><code>transformers_utils/configs/deepseek_v41.py</code></td>
+<td><code>DeepseekV41Config</code>（<code>:8</code>，基类 <code>PreTrainedConfig</code>）</td>
+</tr>
+<tr>
+<td>多模态入口</td>
+<td><code>models/deepseek_v41/nvidia/vl_model.py</code></td>
+<td><code>DeepseekV41ForCausalLM</code>（<code>:117</code>，即 checkpoint 的 <code>architectures</code>）</td>
+</tr>
+<tr>
+<td>文本塔入口</td>
+<td><code>models/deepseek_v41/nvidia/model.py</code></td>
+<td><code>DeepseekV41LLMForCausalLM</code>（<code>:1537</code>）</td>
+</tr>
+<tr>
+<td>主干</td>
+<td>同上</td>
+<td><code>DeepseekV4Model</code>（<code>:662</code>）、<code>_run_layers</code>（<code>:1093</code>）、<code>_collapse</code>（<code>:1138</code>）、<code>_run_replay_layers</code>（<code>:1160</code>）</td>
+</tr>
+<tr>
+<td>后半段窗口重放</td>
+<td><code>models/deepseek_v41/decoder_replay_layers.py</code></td>
+<td><code>DecoderReplayLayers</code>（<code>:40</code>）、<code>ReplayBatch</code>（<code>:31</code>）</td>
+</tr>
+<tr>
+<td>单层</td>
+<td><code>models/deepseek_v41/nvidia/model.py</code></td>
+<td><code>DeepseekV4DecoderLayer</code>（<code>:283</code>）、<code>write_kv</code>（<code>:627</code>）</td>
+</tr>
+<tr>
+<td>MoE 装配</td>
+<td>同上</td>
+<td><code>DeepseekV4MoE</code>（<code>:125</code>），继承 V4.0</td>
+</tr>
+<tr>
+<td><strong>MoE 专家执行</strong></td>
+<td><strong><code>models/deepseek_v4/nvidia/model.py</code></strong></td>
+<td><code>DeepseekV4MegaMoEExperts</code>（<code>:212</code>）、<code>DeepseekV4MoE</code>（<code>:661</code>）</td>
+</tr>
+<tr>
+<td>MegaMoE 输入组织</td>
+<td><code>models/deepseek_v4/nvidia/ops/prepare_megamoe.py</code></td>
+<td><code>prepare_megamoe_inputs</code></td>
+</tr>
+<tr>
+<td>Attention 抽象基类</td>
+<td><code>models/deepseek_v41/attention.py</code></td>
+<td><code>DeepseekV4Attention</code>（<code>:176</code>，ABC）、<code>_o_proj</code>（<code>:248</code>）</td>
+</tr>
+<tr>
+<td>Indexer</td>
+<td>同上</td>
+<td><code>DeepseekV4Indexer</code>（<code>:1255</code>）、<code>DeepseekV4IndexerCache</code>（<code>:1175</code>）、<code>_produce_k</code>（<code>:1405</code>）</td>
+</tr>
+<tr>
+<td><strong>Indexer 打分 op</strong></td>
+<td><strong><code>model_executor/layers/sparse_attn_indexer.py</code></strong>、<strong><code>sparse_mqa_indexer.py</code></strong></td>
+<td><code>SparseAttnIndexer</code>、<code>SparseMQAIndexer</code>（由 <code>DeepseekV4Indexer</code> 的 <code>attn_cls</code> / <code>mqa_cls</code> 两个 ClassVar 指向，是平台替换点）</td>
+</tr>
+<tr>
+<td>Compressor</td>
+<td><code>models/deepseek_v41/compressor.py</code></td>
+<td><code>DeepseekCompressor</code>（<code>:175</code>）</td>
+</tr>
+<tr>
+<td>Engram</td>
+<td><code>models/deepseek_v41/common/engram.py</code></td>
+<td><code>Engram</code>（<code>:1513</code>）、<code>EngramLayout</code>（<code>:208</code>）、<code>NgramHashState</code>（<code>:423</code>）、<code>EngramBatch</code>（<code>:1391</code>）、<code>ParallelEngramEmbedding</code>（<code>:942</code>）</td>
+</tr>
+<tr>
+<td>DSpark</td>
+<td><code>models/deepseek_v41/nvidia/dspark.py</code></td>
+<td><code>DSparkDeepseekV4Model</code>（<code>:72</code>）、<code>DSparkDeepseekV4ForCausalLM</code>（<code>:280</code>）</td>
+</tr>
+<tr>
+<td>量化配置</td>
+<td><code>models/deepseek_v41/quant_config.py</code></td>
+<td><code>DeepseekV4FP8Config</code>（<code>:37</code>）</td>
+</tr>
+<tr>
+<td>后端与 metadata</td>
+<td><code>models/deepseek_v41/sparse_mla.py</code></td>
+<td><code>DeepseekV4SparseMLABackend</code>（<code>:71</code>）、<code>DeepseekV41SparseSWAMetadataBuilder</code>（<code>:53</code>）</td>
+</tr>
+<tr>
+<td><strong>mHC 计算核</strong></td>
+<td><strong><code>model_executor/kernels/mhc/</code></strong></td>
+<td><code>tilelang.py</code>（<code>mhc_pre_delayed_tilelang</code> / <code>mhc_post_tilelang</code> / <code>mhc_fused_post_pre_delayed_tilelang</code>）、<code>triton.py</code>（<code>hc_collapse_triton</code>）</td>
+</tr>
+<tr>
+<td>mHC 的 NV 变体</td>
+<td><code>models/deepseek_v41/nvidia/ops/mhc.py</code>、<code>mega_mhc.py</code></td>
+<td><code>mhc.py</code>：<code>supports_mhc_overlap</code>（<code>:44</code>）、<code>mhc_pre_delayed_overlap</code>（<code>:98</code>）、<code>mhc_shifted_post_pre</code>（<code>:191</code>）；<code>mega_mhc.py</code>：<code>is_mega_mhc_supported</code>（<code>:17</code>）、<code>can_use_mega_mhc</code>（<code>:31</code>）、<code>mhc_shifted_post_pre_deep_gemm</code>（<code>:47</code>）</td>
+</tr>
+<tr>
+<td>cache 布局</td>
+<td><code>models/deepseek_v41/common/ops/cache_utils.py</code></td>
+<td><code>V4_BYTES_PER_TOKEN</code>（<code>:48</code>）、<code>V41_BYTES_PER_TOKEN</code>（<code>:49</code>）、<code>dequantize_and_gather_k_cache</code>（<code>:772</code>）、<code>compute_global_topk_indices_and_lens</code>（<code>:832</code>）、<code>combine_topk_swa_indices</code>（<code>:925</code>）</td>
+</tr>
+<tr>
+<td>压缩 cache 写入</td>
+<td><code>models/deepseek_v41/common/ops/fused_compress_quant_cache.py</code></td>
+<td><code>rope_quant_insert</code>（<code>:224</code>）及其按字节宽分派的 kernel 表（<code>:256-257</code>）</td>
+</tr>
+<tr>
+<td>Indexer K 写入</td>
+<td><code>models/deepseek_v41/common/ops/indexer_k_store.py</code></td>
+<td><code>indexer_k_norm_rope_store</code>（<code>:29</code>）</td>
+</tr>
+<tr>
+<td>Q/KV 归一化融合</td>
+<td><code>models/deepseek_v41/common/ops/query_quant.py</code></td>
+<td><code>fused_q_kv_rmsnorm_quant</code>（<code>:90</code>）、<code>can_fuse_query_quant</code>（<code>:135</code>）</td>
+</tr>
+<tr>
+<td>O 投影</td>
+<td><code>models/deepseek_v41/nvidia/ops/o_proj.py</code>、<code>fused_wo_a.py</code></td>
+<td><code>dsv41_o_proj</code>（<code>:63</code>）</td>
+</tr>
+<tr>
+<td>RoPE 构造</td>
+<td><code>models/deepseek_v41/common/rope.py</code></td>
+<td><code>build_deepseek_v4_rope</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>FlashMLA 本体不在模型目录：<code>flash_mla_with_kvcache</code> / <code>flash_mla_sparse_fwd</code> 由 <code>vllm/v1/attention/ops/flashmla.py</code> 导入，再往下是外部 FlashMLA 库。</p>
+<h3 id="62-四个-attention-后端类">6.2 四个 Attention 后端类</h3>
+<p>这是 NV 路径的实现分叉点，<strong>不是只有 FlashMLA 一条路</strong>。选择入口是 <code>nvidia/model.py</code> 的 <code>_select_dsv4_attn_cls</code>（<code>:197</code>），它把通用的 sparse-MLA 后端枚举映射到 V4.1 专用类：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>后端枚举</th>
+<th>实现类</th>
+<th>文件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLASHMLA_SPARSE_DSV41</code>（及 <code>_DSV4</code> / 通用）</td>
+<td><code>DeepseekV4FlashMLAAttention</code></td>
+<td><code>nvidia/flashmla.py:50</code></td>
+</tr>
+<tr>
+<td><code>FLASHMLA_MEGA_ATTN_DSV41</code></td>
+<td><code>DeepseekV4MegaAttnAttention</code></td>
+<td><code>nvidia/flash_mla_mega_attn.py:145</code>（继承上一行）</td>
+</tr>
+<tr>
+<td><code>FLASHINFER_MLA_SPARSE_DSV41</code></td>
+<td><code>DeepseekV4FlashInferMLAAttention</code></td>
+<td><code>nvidia/flashinfer_sparse.py:246</code></td>
+</tr>
+<tr>
+<td>同上，但 SM12 设备</td>
+<td><code>DeepseekV4FlashInferSM120Attention</code></td>
+<td><code>nvidia/flashinfer_sparse.py:602</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>不指定后端时的缺省：<strong>SM12 走 FlashInfer，SM100 在拓扑允许时走 mega attention，其余走 FlashMLA</strong>。V3.2 的 <code>FLASHINFER_MLA_SPARSE</code> / <code>_SM120</code> 会被显式报错拒绝，必须用带 <code>_DSV41</code> 后缀的那个。</p>
+<p>四个类都继承 <code>attention.py</code> 的抽象基类 <code>DeepseekV4Attention</code>，各自实现 <code>_forward_decode</code> / <code>_forward_prefill</code> / <code>_o_proj</code>。<strong>第 5 章描述的是 <code>nvidia/flashmla.py</code> 这条缺省路径。</strong></p>
+<hr>
+<h2 id="7-核验与维护">7. 核验与维护</h2>
+<h3 id="71-本文的核验记录">7.1 本文的核验记录</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>做法</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>锁定树身份</td>
+<td><code>git rev-parse HEAD</code> + <code>git describe --tags</code> + <code>git remote -v</code></td>
+<td>官方仓库，HEAD <code>5df63a7203</code> 即 <code>v0.32.0</code> tag</td>
+</tr>
+<tr>
+<td>确认目录布局</td>
+<td><code>git ls-tree -r --name-only HEAD</code> 过滤 <code>^vllm/.*deepseek_v4</code></td>
+<td>模型实现位于 <code>vllm/models/deepseek_v41/</code></td>
+</tr>
+<tr>
+<td>符号存在性</td>
+<td>提取 277 个候选符号，一次性读入 <code>vllm/</code> 全部源码做子串匹配</td>
+<td><strong>277/277 命中</strong></td>
+</tr>
+<tr>
+<td>实现路径定位</td>
+<td>按类名/函数名定位到文件与行，核对继承链与后端选择分支</td>
+<td>已写入第 6 章代码地图</td>
+</tr>
+<tr>
+<td>计数类断言</td>
+<td>对照官方 <code>config.json</code> 复算 <code>compress_ratios</code>、各 source 层表、候选参数、Engram 与 DSpark 字段</td>
+<td><strong>全部一致</strong>（2 / 18 / 20 三档；4 个 kv-source；8 个 index-source；候选 L20 / 2048 块 / 每块 8；24 个哈希列）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="72-升级到更新的上游版本时">7.2 升级到更新的上游版本时</h3>
+<ol>
+<li><strong>锁定新树身份</strong>：版本号、commit，确认 <code>vllm/models/deepseek_v41/</code> 目录没有重组。</li>
+<li><strong>重放符号核验</strong>：一次性全量读入源码做子串匹配，比逐符号 grep 快两个数量级。</li>
+<li><strong>复算计数类断言</strong>：对照当时的官方 <code>config.json</code>，不要沿用旧值。</li>
+<li><strong>重新定位代码地图</strong>：第 6 章的表是行号密集区，跨目录复用关系（<code>deepseek_v4/</code>、<code>model_executor/kernels/mhc/</code>、<code>model_executor/layers/</code>）尤其要确认。</li>
+<li><strong>重点复查量化分派与后端选择</strong>：第 4 章与 <a href="/articles/dsv41-upstream/#62-%E5%9B%9B%E4%B8%AA-attention-%E5%90%8E%E7%AB%AF%E7%B1%BB">6.2 节</a>是上游改动最活跃的区域。</li>
+</ol>
+<p>完成上述步骤前，顶部基线表不要提前改写。</p></div><div class="article-source">学习笔记 · 正文中的引用及原始来源链接予以保留</div><nav class="article-pagination" aria-label="上一篇和下一篇"><a href="/articles/dsv41-architecture/"><small>上一篇</small>DeepSeek-V4.1-Flash：从模型结构到一次推理</a><a href="/articles/dsv41-deployment/"><small>下一篇</small>DeepSeek-V4.1-Flash 部署指南</a></nav></article></div><aside class="article-outline"><nav aria-label="本文大纲"><div class="outline-title"><h2>本文大纲</h2><span class="reading-percent">0%</span></div><div class="reading-track"><span class="reading-progress-bar"></span></div><div class="outline-tree"><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-upstream/#%E5%9F%BA%E7%BA%BF" data-heading="基线">基线</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-upstream/#0-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88" data-heading="0-架构概览">0. 架构概览</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#1-%E5%85%88%E5%BB%BA%E7%AB%8B%E6%A8%A1%E5%9E%8B%E8%BD%AE%E5%BB%93config-%E6%80%8E%E4%B9%88%E5%86%B3%E5%AE%9A-40-%E5%B1%82" data-heading="1-先建立模型轮廓config-怎么决定-40-层">1. 先建立模型轮廓：config 怎么决定 40 层</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#11-config-%E6%80%8E%E6%A0%B7%E8%A2%AB%E8%AF%BB%E8%BF%9B%E6%9D%A5" data-heading="11-config-怎样被读进来">1.1 config 怎样被读进来</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#12-%E5%85%B3%E9%94%AE%E5%AD%97%E6%AE%B5" data-heading="12-关键字段">1.2 关键字段</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#2-%E5%85%88%E4%BB%8E%E4%B8%8A%E5%B1%82%E8%B5%B0%E9%80%9A%E4%B8%80%E6%AC%A1-forward" data-heading="2-先从上层走通一次-forward">2. 先从上层走通一次 forward</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#21-%E5%AF%B9%E8%B1%A1%E6%80%8E%E6%A0%B7%E5%B5%8C%E5%A5%97%E4%BB%A5%E5%8F%8A%E8%BF%9B%E7%AC%AC-0-%E5%B1%82%E5%89%8D%E5%85%88%E5%81%9A%E4%BA%86%E5%93%AA%E5%87%A0%E6%AD%A5" data-heading="21-对象怎样嵌套以及进第-0-层前先做了哪几步">2.1 对象怎样嵌套，以及进第 0 层前先做了哪几步</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#22-%E4%B8%BB%E5%B9%B2%E5%BE%AA%E7%8E%AF%E6%AF%8F%E5%B1%82%E4%BA%A4%E8%BF%98%E4%B8%80%E4%B8%AA%E5%85%AD%E5%85%83%E7%BB%84" data-heading="22-主干循环每层交还一个六元组">2.2 主干循环：每层交还一个六元组</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#23-%E5%8D%95%E5%B1%82%E5%86%85%E9%83%A8%E5%9B%9B%E4%B8%AA%E5%85%A5%E5%8F%A3%E5%88%86%E6%94%AF%E4%B8%8E%E5%B1%82%E6%9C%AB%E8%BF%94%E5%9B%9E" data-heading="23-单层内部四个入口分支与层末返回">2.3 单层内部：四个入口分支与层末返回</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#24-%E5%90%8E%E5%8D%8A%E6%AE%B5%E5%88%86%E6%B5%81decoder_replay_layers%E4%B8%8E%E6%9C%AB%E5%B1%82%E5%9B%9B%E6%B5%81%E5%90%88%E5%B9%B6_collapse--hc_collapse_triton" data-heading="24-后半段分流decoder_replay_layers与末层四流合并_collapse--hc_collapse_triton">2.4 后半段分流（decoder_replay_layers）与末层四流合并（_collapse / hc_collapse_triton）</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#3-%E6%B7%B1%E5%85%A5%E6%A8%A1%E5%9D%97%E5%86%85%E9%83%A8mhcattentionmoeengram-%E4%B8%8E-dspark" data-heading="3-深入模块内部mhcattentionmoeengram-与-dspark">3. 深入模块内部：mHC、Attention、MoE、Engram 与 DSpark</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#31-mhc%E4%BB%8E%E4%B8%8A%E5%B1%82%E5%85%A5%E5%8F%A3%E5%88%B0-kernel-%E7%9A%84%E8%B0%83%E7%94%A8%E9%93%BE%E4%B8%8E%E5%86%85%E9%83%A8%E8%AE%A1%E7%AE%97" data-heading="31-mhc从上层入口到-kernel-的调用链与内部计算">3.1 mHC：从上层入口到 kernel 的调用链与内部计算</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#32-attentionsparse-mla-%E7%9A%84%E7%BB%84%E6%88%90%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E4%B8%8E-forward-%E6%B5%81%E7%A8%8B" data-heading="32-attentionsparse-mla-的组成跨层复用与-forward-流程">3.2 Attention：Sparse MLA 的组成、跨层复用与 forward 流程</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft" data-heading="33-moe一个类同时服务主干和-draft">3.3 MoE：一个类同时服务主干和 draft</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#34-engramn-gram-%E5%93%88%E5%B8%8C%E6%9F%A5%E8%A1%A8%E4%B8%8E%E9%97%A8%E6%8E%A7%E6%B3%A8%E5%85%A5" data-heading="34-engramn-gram-哈希查表与门控注入">3.4 Engram：N-gram 哈希查表与门控注入</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#35-dspark3-%E5%B1%82%E5%8D%8A%E8%87%AA%E5%9B%9E%E5%BD%92%E6%8A%95%E6%9C%BA%E8%8D%89%E7%A8%BF%E6%A8%A1%E5%9E%8B" data-heading="35-dspark3-层半自回归投机草稿模型">3.5 DSpark：3 层半自回归投机草稿模型</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#4-%E9%87%8F%E5%8C%96mxfp8-%E7%BA%BF%E6%80%A7--mxfp4-%E4%B8%93%E5%AE%B6" data-heading="4-量化mxfp8-线性--mxfp4-专家">4. 量化：MXFP8 线性 + MXFP4 专家</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#41-fp4-%E4%B8%93%E5%AE%B6%E6%8C%89%E5%B1%82%E5%86%8D%E5%88%86-nvfp4--mxfp4" data-heading="41-fp4-专家按层再分-nvfp4--mxfp4">4.1 fp4 专家按层再分 NVFP4 / MXFP4</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#42-%E5%85%B6%E4%BD%99%E9%85%8D%E5%A5%97%E7%BA%A6%E6%9D%9F" data-heading="42-其余配套约束">4.2 其余配套约束</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#5-prefill--decode-%E4%B8%8E-kernel-%E9%80%9F%E6%9F%A5" data-heading="5-prefill--decode-与-kernel-速查">5. Prefill / Decode 与 kernel 速查</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#51-%E7%BB%84%E4%BB%B6--kernel-%E6%80%BB%E8%A1%A8" data-heading="51-组件--kernel-总表">5.1 组件 → kernel 总表</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#52-flashmla-%E7%9A%84-prefill--decode-%E5%BD%A2%E6%80%81%E5%B7%AE" data-heading="52-flashmla-的-prefill--decode-形态差">5.2 FlashMLA 的 Prefill / Decode 形态差</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#53-cache-%E8%AE%B0%E5%BD%95%E5%B8%83%E5%B1%80" data-heading="53-cache-记录布局">5.3 cache 记录布局</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#54-%E5%90%8E%E7%AB%AF%E4%B8%8E%E5%BC%80%E5%85%B3" data-heading="54-后端与开关">5.4 后端与开关</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#6-%E4%BB%A3%E7%A0%81%E5%9C%B0%E5%9B%BE%E6%9F%A5%E9%98%85%E7%94%A8" data-heading="6-代码地图查阅用">6. 代码地图（查阅用）</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#61-%E6%A8%A1%E5%9D%97--%E6%96%87%E4%BB%B6" data-heading="61-模块--文件">6.1 模块 → 文件</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#62-%E5%9B%9B%E4%B8%AA-attention-%E5%90%8E%E7%AB%AF%E7%B1%BB" data-heading="62-四个-attention-后端类">6.2 四个 Attention 后端类</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#7-%E6%A0%B8%E9%AA%8C%E4%B8%8E%E7%BB%B4%E6%8A%A4" data-heading="7-核验与维护">7. 核验与维护</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#71-%E6%9C%AC%E6%96%87%E7%9A%84%E6%A0%B8%E9%AA%8C%E8%AE%B0%E5%BD%95" data-heading="71-本文的核验记录">7.1 本文的核验记录</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#72-%E5%8D%87%E7%BA%A7%E5%88%B0%E6%9B%B4%E6%96%B0%E7%9A%84%E4%B8%8A%E6%B8%B8%E7%89%88%E6%9C%AC%E6%97%B6" data-heading="72-升级到更新的上游版本时">7.2 升级到更新的上游版本时</a></div></details></div></nav></aside></div><dialog id="outline-dialog" class="outline-popup" aria-labelledby="outline-dialog-title"><div class="search-heading"><h2 id="outline-dialog-title">本文大纲</h2><button class="icon-button" id="close-outline" aria-label="关闭本文大纲">×</button></div><nav class="outline-tree" aria-label="手机本文大纲"><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-upstream/#%E5%9F%BA%E7%BA%BF" data-heading="基线">基线</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-upstream/#0-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88" data-heading="0-架构概览">0. 架构概览</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#1-%E5%85%88%E5%BB%BA%E7%AB%8B%E6%A8%A1%E5%9E%8B%E8%BD%AE%E5%BB%93config-%E6%80%8E%E4%B9%88%E5%86%B3%E5%AE%9A-40-%E5%B1%82" data-heading="1-先建立模型轮廓config-怎么决定-40-层">1. 先建立模型轮廓：config 怎么决定 40 层</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#11-config-%E6%80%8E%E6%A0%B7%E8%A2%AB%E8%AF%BB%E8%BF%9B%E6%9D%A5" data-heading="11-config-怎样被读进来">1.1 config 怎样被读进来</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#12-%E5%85%B3%E9%94%AE%E5%AD%97%E6%AE%B5" data-heading="12-关键字段">1.2 关键字段</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#2-%E5%85%88%E4%BB%8E%E4%B8%8A%E5%B1%82%E8%B5%B0%E9%80%9A%E4%B8%80%E6%AC%A1-forward" data-heading="2-先从上层走通一次-forward">2. 先从上层走通一次 forward</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#21-%E5%AF%B9%E8%B1%A1%E6%80%8E%E6%A0%B7%E5%B5%8C%E5%A5%97%E4%BB%A5%E5%8F%8A%E8%BF%9B%E7%AC%AC-0-%E5%B1%82%E5%89%8D%E5%85%88%E5%81%9A%E4%BA%86%E5%93%AA%E5%87%A0%E6%AD%A5" data-heading="21-对象怎样嵌套以及进第-0-层前先做了哪几步">2.1 对象怎样嵌套，以及进第 0 层前先做了哪几步</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#22-%E4%B8%BB%E5%B9%B2%E5%BE%AA%E7%8E%AF%E6%AF%8F%E5%B1%82%E4%BA%A4%E8%BF%98%E4%B8%80%E4%B8%AA%E5%85%AD%E5%85%83%E7%BB%84" data-heading="22-主干循环每层交还一个六元组">2.2 主干循环：每层交还一个六元组</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#23-%E5%8D%95%E5%B1%82%E5%86%85%E9%83%A8%E5%9B%9B%E4%B8%AA%E5%85%A5%E5%8F%A3%E5%88%86%E6%94%AF%E4%B8%8E%E5%B1%82%E6%9C%AB%E8%BF%94%E5%9B%9E" data-heading="23-单层内部四个入口分支与层末返回">2.3 单层内部：四个入口分支与层末返回</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#24-%E5%90%8E%E5%8D%8A%E6%AE%B5%E5%88%86%E6%B5%81decoder_replay_layers%E4%B8%8E%E6%9C%AB%E5%B1%82%E5%9B%9B%E6%B5%81%E5%90%88%E5%B9%B6_collapse--hc_collapse_triton" data-heading="24-后半段分流decoder_replay_layers与末层四流合并_collapse--hc_collapse_triton">2.4 后半段分流（decoder_replay_layers）与末层四流合并（_collapse / hc_collapse_triton）</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#3-%E6%B7%B1%E5%85%A5%E6%A8%A1%E5%9D%97%E5%86%85%E9%83%A8mhcattentionmoeengram-%E4%B8%8E-dspark" data-heading="3-深入模块内部mhcattentionmoeengram-与-dspark">3. 深入模块内部：mHC、Attention、MoE、Engram 与 DSpark</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#31-mhc%E4%BB%8E%E4%B8%8A%E5%B1%82%E5%85%A5%E5%8F%A3%E5%88%B0-kernel-%E7%9A%84%E8%B0%83%E7%94%A8%E9%93%BE%E4%B8%8E%E5%86%85%E9%83%A8%E8%AE%A1%E7%AE%97" data-heading="31-mhc从上层入口到-kernel-的调用链与内部计算">3.1 mHC：从上层入口到 kernel 的调用链与内部计算</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#32-attentionsparse-mla-%E7%9A%84%E7%BB%84%E6%88%90%E8%B7%A8%E5%B1%82%E5%A4%8D%E7%94%A8%E4%B8%8E-forward-%E6%B5%81%E7%A8%8B" data-heading="32-attentionsparse-mla-的组成跨层复用与-forward-流程">3.2 Attention：Sparse MLA 的组成、跨层复用与 forward 流程</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#33-moe%E4%B8%80%E4%B8%AA%E7%B1%BB%E5%90%8C%E6%97%B6%E6%9C%8D%E5%8A%A1%E4%B8%BB%E5%B9%B2%E5%92%8C-draft" data-heading="33-moe一个类同时服务主干和-draft">3.3 MoE：一个类同时服务主干和 draft</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#34-engramn-gram-%E5%93%88%E5%B8%8C%E6%9F%A5%E8%A1%A8%E4%B8%8E%E9%97%A8%E6%8E%A7%E6%B3%A8%E5%85%A5" data-heading="34-engramn-gram-哈希查表与门控注入">3.4 Engram：N-gram 哈希查表与门控注入</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#35-dspark3-%E5%B1%82%E5%8D%8A%E8%87%AA%E5%9B%9E%E5%BD%92%E6%8A%95%E6%9C%BA%E8%8D%89%E7%A8%BF%E6%A8%A1%E5%9E%8B" data-heading="35-dspark3-层半自回归投机草稿模型">3.5 DSpark：3 层半自回归投机草稿模型</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#4-%E9%87%8F%E5%8C%96mxfp8-%E7%BA%BF%E6%80%A7--mxfp4-%E4%B8%93%E5%AE%B6" data-heading="4-量化mxfp8-线性--mxfp4-专家">4. 量化：MXFP8 线性 + MXFP4 专家</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#41-fp4-%E4%B8%93%E5%AE%B6%E6%8C%89%E5%B1%82%E5%86%8D%E5%88%86-nvfp4--mxfp4" data-heading="41-fp4-专家按层再分-nvfp4--mxfp4">4.1 fp4 专家按层再分 NVFP4 / MXFP4</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#42-%E5%85%B6%E4%BD%99%E9%85%8D%E5%A5%97%E7%BA%A6%E6%9D%9F" data-heading="42-其余配套约束">4.2 其余配套约束</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#5-prefill--decode-%E4%B8%8E-kernel-%E9%80%9F%E6%9F%A5" data-heading="5-prefill--decode-与-kernel-速查">5. Prefill / Decode 与 kernel 速查</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#51-%E7%BB%84%E4%BB%B6--kernel-%E6%80%BB%E8%A1%A8" data-heading="51-组件--kernel-总表">5.1 组件 → kernel 总表</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#52-flashmla-%E7%9A%84-prefill--decode-%E5%BD%A2%E6%80%81%E5%B7%AE" data-heading="52-flashmla-的-prefill--decode-形态差">5.2 FlashMLA 的 Prefill / Decode 形态差</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#53-cache-%E8%AE%B0%E5%BD%95%E5%B8%83%E5%B1%80" data-heading="53-cache-记录布局">5.3 cache 记录布局</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#54-%E5%90%8E%E7%AB%AF%E4%B8%8E%E5%BC%80%E5%85%B3" data-heading="54-后端与开关">5.4 后端与开关</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#6-%E4%BB%A3%E7%A0%81%E5%9C%B0%E5%9B%BE%E6%9F%A5%E9%98%85%E7%94%A8" data-heading="6-代码地图查阅用">6. 代码地图（查阅用）</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#61-%E6%A8%A1%E5%9D%97--%E6%96%87%E4%BB%B6" data-heading="61-模块--文件">6.1 模块 → 文件</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#62-%E5%9B%9B%E4%B8%AA-attention-%E5%90%8E%E7%AB%AF%E7%B1%BB" data-heading="62-四个-attention-后端类">6.2 四个 Attention 后端类</a></div></details><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-upstream/#7-%E6%A0%B8%E9%AA%8C%E4%B8%8E%E7%BB%B4%E6%8A%A4" data-heading="7-核验与维护">7. 核验与维护</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-upstream/#71-%E6%9C%AC%E6%96%87%E7%9A%84%E6%A0%B8%E9%AA%8C%E8%AE%B0%E5%BD%95" data-heading="71-本文的核验记录">7.1 本文的核验记录</a><a class="toc-link level-3" href="/articles/dsv41-upstream/#72-%E5%8D%87%E7%BA%A7%E5%88%B0%E6%9B%B4%E6%96%B0%E7%9A%84%E4%B8%8A%E6%B8%B8%E7%89%88%E6%9C%AC%E6%97%B6" data-heading="72-升级到更新的上游版本时">7.2 升级到更新的上游版本时</a></div></details></nav></dialog></main>
+  <footer class="site-footer"><span>© 2026 DarrenZhang · 博观而约取，厚积而薄发。</span><div><a href="/bookmarks/" hidden>阅读收藏</a><a href="/">返回主页</a></div></footer>
+  <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-heading"><h2 id="search-title">搜索全部知识库</h2><button class="icon-button" id="close-search" aria-label="关闭搜索">×</button></div><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" maxlength="200" placeholder="搜索标题、关键词或正文…" autocomplete="off"></label><p id="search-summary" class="search-hint" role="status" aria-live="polite">搜索标题、章节与正文</p><div id="search-results" role="listbox" aria-label="搜索结果"></div><div class="search-footer"><span>↑ ↓ 选择 · Enter 阅读</span><span>Esc 关闭</span></div></dialog>
+  <dialog id="image-preview" class="image-preview" aria-labelledby="image-title"><header class="image-preview-header"><h2 id="image-title">架构图预览</h2><div class="image-controls"><button id="image-zoom-out" aria-label="缩小图片">−</button><span id="image-scale" aria-live="polite">100%</span><button id="image-zoom-in" aria-label="放大图片">＋</button><button id="image-fit">适应窗口</button><a id="image-original" target="_blank" rel="noopener">打开原图 ↗</a><button id="image-close" aria-label="关闭图片预览">×</button></div></header><div id="image-stage" class="image-stage"><img id="image-large" alt="" draggable="false"></div><footer class="image-preview-footer">滚轮缩放 · 拖动平移 · Esc 关闭 <span>＋ / − 缩放，0 适应窗口</span></footer></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+

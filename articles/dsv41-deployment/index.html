@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="按原文记录的环境、编译安装、启动配置和验收方法进行查阅。">
+  <title>DeepSeek-V4.1-Flash 部署指南 · DarrenZhang</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/theme.js?v=fbee3d9f1352"></script>
+  <link rel="stylesheet" href="/vendor--site-font.css?v=b0946ebef50d">
+  <link rel="stylesheet" href="/style.css?v=5cd1cd8771cb">
+  <link rel="stylesheet" href="/typography.css?v=a72487c06eb6">
+  <link rel="stylesheet" href="/vendor--katex.local.css">
+  <link rel="stylesheet" href="/theme.css?v=256cddc575d0">
+  <script defer src="/vendor--katex.min.js"></script>
+  <script defer src="/vendor--auto-render.min.js"></script>
+  <link rel="stylesheet" href="/directory.css?v=47fa461e633d" data-reader-directory>
+  <link rel="stylesheet" href="/code.css?v=059cce3dda81" data-reader-code>
+  <script type="module" src="/app.js?v=033a80e631fe"></script>
+
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://darrenzhang1007.github.io/articles/dsv41-deployment/">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="DarrenZhang · 知识库">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DeepSeek-V4.1-Flash 部署指南">
+  <meta property="og:description" content="按原文记录的环境、编译安装、启动配置和验收方法进行查阅。">
+  <meta property="og:url" content="https://darrenzhang1007.github.io/articles/dsv41-deployment/">
+  <meta property="og:image" content="https://darrenzhang1007.github.io/share-default.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="DarrenZhang 的个人技术知识库">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DeepSeek-V4.1-Flash 部署指南">
+  <meta name="twitter:description" content="按原文记录的环境、编译安装、启动配置和验收方法进行查阅。">
+  <meta name="twitter:image" content="https://darrenzhang1007.github.io/share-default.png">
+  <meta property="article:modified_time" content="2026-10-29T07:29:05.611Z">
+  <script type="application/ld+json">[{"@context":"https://schema.org","@type":"Article","@id":"https://darrenzhang1007.github.io/articles/dsv41-deployment/","url":"https://darrenzhang1007.github.io/articles/dsv41-deployment/","name":"DeepSeek-V4.1-Flash 部署指南","headline":"DeepSeek-V4.1-Flash 部署指南","author":{"@type":"Person","name":"DarrenZhang","url":"https://darrenzhang1007.github.io/"},"dateModified":"2026-10-29T07:29:05.611Z","mainEntityOfPage":"https://darrenzhang1007.github.io/articles/dsv41-deployment/","articleSection":"DeepSeek-V4.1-Flash","image":["https://darrenzhang1007.github.io/share-default.png"],"description":"按原文记录的环境、编译安装、启动配置和验收方法进行查阅。","inLanguage":"zh-CN"},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"主页","item":"https://darrenzhang1007.github.io/"},{"@type":"ListItem","position":2,"name":"DeepSeek-V4.1-Flash","item":"https://darrenzhang1007.github.io/books/dsv41-flash/"},{"@type":"ListItem","position":3,"name":"DeepSeek-V4.1-Flash 部署指南","item":"https://darrenzhang1007.github.io/articles/dsv41-deployment/"}]}]</script>
+</head>
+<body class="reader-view">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="DarrenZhang 首页"><span class="brand-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg></span>DarrenZhang<span class="brand-divider">/</span><span class="brand-label">知识库</span></a>
+      <nav aria-label="主导航"><a href="/" data-nav="home">主页</a><a href="/articles/" data-nav="articles" class="active" aria-current="page">全部文章</a></nav>
+      <div class="header-actions">
+        <a class="manage-link" href="https://darrenzhang-notebook.blue-koala-1430.chatgpt.site" target="_blank" rel="noopener" aria-label="管理网站"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 7 9 7 9s7-5 7-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>管理</span></a>
+        <button class="search-trigger" aria-label="搜索文章"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span>搜索文章、知识库</span><kbd>Ctrl K</kbd></button>
+        <div class="theme-switcher">
+          <button id="theme-toggle" class="theme-toggle" aria-label="显示主题" aria-controls="theme-panel" aria-expanded="false" title="显示主题">
+            <svg class="theme-symbol" data-theme-symbol="system" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <svg class="theme-symbol" data-theme-symbol="light" viewBox="0 0 24 24" aria-hidden="true" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg>
+            <svg class="theme-symbol" data-theme-symbol="dark" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M20.5 14A8.7 8.7 0 0 1 10 3.5 8.7 8.7 0 1 0 20.5 14Z"/></svg>
+          </button>
+          <div id="theme-panel" class="theme-panel" role="group" aria-label="显示主题" hidden>
+            <p>显示主题</p>
+            <button type="button" data-theme-option="system" aria-pressed="true"><span>跟随系统</span><span class="theme-check" aria-hidden="true">✓</span></button>
+            <button type="button" data-theme-option="light" aria-pressed="false"><span>日间</span><span class="theme-check" aria-hidden="true">✓</span></button>
+            <button type="button" data-theme-option="dark" aria-pressed="false"><span>夜间</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"><div class="reader-toolbar"><button id="toggle-directory" aria-controls="book-sidebar" aria-expanded="false"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg> 知识库</button><a href="/books/dsv41-flash/">DeepSeek-V4.1-Flash</a><button id="toggle-outline" aria-controls="outline-dialog" aria-expanded="false">本文大纲 <span class="reading-percent">0%</span></button></div><button class="sidebar-mask" id="sidebar-mask" aria-label="关闭目录"></button><div class="reader-shell has-toc"><aside class="book-sidebar" id="book-sidebar"><a class="sidebar-back" href="/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7m-16-2v13h14V8M9 21v-8h6v8"/></svg> 返回主页</a><a class="sidebar-book" href="/books/dsv41-flash/"><span class="small-book"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg></span><strong>DeepSeek-V4.1-Flash</strong></a><button class="sidebar-search" data-book-search="dsv41-flash"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>搜索当前知识库</span><kbd>/</kbd></button><a class="sidebar-overview " href="/books/dsv41-flash/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7m-16-2v13h14V8M9 21v-8h6v8"/></svg> 知识库首页</a><div class="sidebar-section-label">目录 <span>7</span></div><nav aria-label="知识库目录"><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>阅读入口</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-index/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>专题索引与阅读导航</span></a></div></details><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>核心文档</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-architecture/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>DeepSeek-V4.1-Flash：从模型结构到一次推理</span></a><a class="tree-note "  href="/articles/dsv41-upstream/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游 vLLM 实现（NVIDIA）</span></a><a class="tree-note active" aria-current="page" href="/articles/dsv41-deployment/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>DeepSeek-V4.1-Flash 部署指南</span></a></div></details><details open class="directory-folder "><summary><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h13a3 3 0 0 1 3 3v15H6a3 3 0 0 1-3-3V6a3 3 0 0 1 1-3ZM7 3v14M3 18a2 2 0 0 1 3-1h14M11 7h5"/></svg><span>图表与参考</span></summary><div class="directory-children"><a class="tree-note "  href="/articles/dsv41-diagrams/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>架构图集与算子映射</span></a><a class="tree-note "  href="/articles/dsv41-reference/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游实现学习讲义</span></a><a class="tree-note "  href="/articles/dsv41-review/"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg><span>上游讲义核验与评审</span></a></div></details></nav><div class="sidebar-bottom"><span>只展示已选入的文章</span><a href="/articles/">全部文章 <svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside><div class="reader-content"><article class="article"><div class="breadcrumbs"><a href="/books/dsv41-flash/">DeepSeek-V4.1-Flash</a><span>/</span><span>文档</span></div><header class="article-head"><h1>DeepSeek-V4.1-Flash 部署指南</h1><div class="document-meta"><span>DarrenZhang</span><time datetime="2026-10-29T07:29:05.611710+00:00">更新于 2026-10-29</time><span>约 33 分钟阅读</span></div><p class="article-description">按原文记录的环境、编译安装、启动配置和验收方法进行查阅。</p><div class="article-actions"><button id="copy-link"><svg class="" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 15 6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2M7 11l-2 2a5 5 0 0 0 7 7l2-2"/></svg> 复制链接</button><a download="DeepSeek-V4.1-Flash 部署指南.md" href="/notes--dsv41-deployment.md">下载 Markdown</a></div></header><div class="prose"><span id="deepseek-v41-flash-w4a8-部署指南"></span>
+<blockquote>
+<p><strong>阅读导航</strong>：<a href="/articles/dsv41-index/">全局索引 (INDEX)</a> ｜ ① <a href="/articles/dsv41-diagrams/">架构图集与算子映射</a> → ② <a href="/articles/dsv41-architecture/">核心架构长文 (README)</a> → <strong>③ <a href="/articles/dsv41-deployment/">实服部署指南（本文）</a></strong> ｜ <a href="/dsv41--assets--html--dsv41_dynamic_architecture.html">分步交互查看器</a></p>
+</blockquote>
+<p>本指南对应127机器、16个Iluvatar BI-V150可见设备、CoreX 5.0及现有容器 <code>ds_v4.1_perf</code>。当前推荐配置为 <strong>TP8 / PP1 / DP2 / EP16、INT8 indexer、DSpark K5 greedy、CUDA Graph</strong>，支持262144上下文、每请求最多5张图片。</p>
+<p>2026-10-21已在 <code>ds_v4.1_perf</code> 内以开发者模式完整编译安装当前插件，正式主扩展直接提供INT8接口，CPU检查、重启和简单请求验证均通过，<strong>16个worker直接使用新主扩展的INT8接口，临时bridge不再加载</strong>。保持 <code>VLLM_ILUVATAR_INDEXER_INT8=1</code> 和原服务全部模型参数；新runtime不再预载镜像旧主扩展或临时bridge。历史主扩展、bridge、性能与精度日志均保留。</p>
+<h2 id="1-版本与产物">1. 版本与产物</h2>
+<p>记录日期：2026-10-21。SDK版本取自本轮产物的构建记录，不以app源码目录之后的HEAD替代。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>当前版本 / 标识</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>容器</td>
+<td><code>ds_v4.1_perf</code>，x86_64；GPU运行均在此容器内</td>
+</tr>
+<tr>
+<td>镜像</td>
+<td><code>registry.iluvatar.com.cn:10443/vllm_plugin/corex_vllm_plugin:0.30.0-corex-5.0.0-ubuntu24.04-py3.12-x86_64-release</code></td>
+</tr>
+<tr>
+<td>本地镜像ID</td>
+<td><code>sha256:4c40065f76a22b798c3325e9ac944821c220637a92e88dcfc0c4b05f7491a579</code></td>
+</tr>
+<tr>
+<td>CoreX / Python</td>
+<td>CoreX 5.0.0；Python 3.12.11</td>
+</tr>
+<tr>
+<td>PyTorch</td>
+<td><code>2.10.0+corex.5.0.0</code>，C++ ABI=0</td>
+</tr>
+<tr>
+<td>vLLM / vllm_iluvatar</td>
+<td>0.30.0 / 0.30.0</td>
+</tr>
+<tr>
+<td>插件源码</td>
+<td>分支 <code>dsv41-pp-dspark-defer-perf</code>；本轮完整安装起点 <code>12788ccc</code>，生产源码与 <code>8b8187b7b083553be614f50778d8bff941bb1579</code> 一致</td>
+</tr>
+<tr>
+<td>安装方式 / 主扩展</td>
+<td><code>pip install -e /workspace/vllm_iluvatar --no-deps --no-build-isolation -v</code>；源码目录正式 <code>_C.so</code>，构建、CPU检查及实服冒烟均通过</td>
+</tr>
+<tr>
+<td>ixformer</td>
+<td><code>08a47e1f2fc7e1b47035b9b60423bd14de015c57</code>，从app组源码用Python3.12/CoreX5.0重编译</td>
+</tr>
+<tr>
+<td>ixinfer</td>
+<td><code>aca6f3547c5731f6716e64149d24b2da74556175</code>，从app组源码用CoreX5.0重编译，<code>libcuinfer.so.7</code></td>
+</tr>
+<tr>
+<td>GPU架构</td>
+<td><code>ivcore11</code></td>
+</tr>
+<tr>
+<td>权重</td>
+<td>宿主机 <code>/mnt/share/user_homes/zyp/models/deepseek-ai/DeepSeek-V4.1-Flash-W4A8</code>；容器 <code>/workspace/models/deepseek-ai/DeepSeek-V4.1-Flash-W4A8</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>SDK源码根目录为宿主机 <code>/mnt/share/user_homes/zyp/app_perf_infer/sdk</code>，容器对应 <code>/workspace/app_perf_infer/sdk</code>。该目录原有Python3.11/CoreX4.4.4产物不是本轮使用的产物。</p>
+<p>构建时SDK子模块并非全部处于父仓库记录的位置：ixformer的 <code>third_party/ixmma</code> 实际为 <code>bad35df9ea5299f8be56a84212dfa97d46c59a98</code>；ixinfer的 <code>3rdparty/msgpack</code>、<code>3rdparty/spdlog</code> 存在工作区差异。<strong>只checkout上表两个HEAD不足以完整复现源码状态。</strong> 完整子模块列表、源码差异、构建命令与10个产物的SHA256均保留在下述构建记录中：</p>
+<pre class="highlight"><code class="language-text">/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/
+  sdk_source_manifest.json
+  sdk_ixformer_source_diff.patch
+  sdk_ixinfer_source_diff.patch
+  sdk_build_commands.json
+  sdk_compiled_manifest.json
+  sdk_build_status.json</code></pre>
+<p><code>sdk_source_manifest.json</code> 的SHA256为 <code>6677dd85fb85ad073da263555e77186b9977ea14a04cff5c3e80df7dcd928141</code>。这是源码定位与产物哈希记录，不承诺两次编译的二进制逐字节一致。</p>
+<h2 id="2-当前部署所需目录">2. 当前部署所需目录</h2>
+<p>宿主机 <code>/mnt/share/user_homes/zyp/</code> 映射为容器 <code>/workspace/</code>。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>用途</th>
+<th>容器路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>插件Python源码</td>
+<td><code>/workspace/vllm_iluvatar</code></td>
+</tr>
+<tr>
+<td>IXFORMER_ROOT</td>
+<td><code>/workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/runtime</code></td>
+</tr>
+<tr>
+<td>ixformer真实编译库</td>
+<td><code>/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/ixformer/lib</code></td>
+</tr>
+<tr>
+<td>IXINFER_LIB</td>
+<td><code>/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/ixinfer</code></td>
+</tr>
+<tr>
+<td>ixformer Python包和扩展链接</td>
+<td><code>/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/runtime/ixformer_runtime</code></td>
+</tr>
+<tr>
+<td>当前正式主扩展</td>
+<td><code>/workspace/vllm_iluvatar/vllm_iluvatar/_C.cpython-312-x86_64-linux-gnu.so</code></td>
+</tr>
+<tr>
+<td>历史INT8临时bridge（保留、不再加载）</td>
+<td><code>/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_merged_sdk_indexer_int8_perf_after_20261020_152607/native_int8_bridge/build/_indexer_int8_native.cpython-312-x86_64-linux-gnu.so</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>IXFORMER_ROOT/ixformer_runtime</code> 是指向上述SDK runtime的链接，ixformer没有安装成独立pip包。新runtime的 <code>sitecustomize.py</code> 从开发者安装正常导入新 <code>_C</code>，仅在首次真实INT8调用成功后记录worker身份、输入dtype及主扩展路径，随后恢复原生函数；不执行旧主扩展预载或bridge补挂。runtime和研发SDK仍为启动依赖，迁移时需要保留链接目标并调整绝对路径。</p>
+<p>正式主扩展SHA256为 <code>d081133c4d0ae4c5d37d93eddfc68fcb2f9acc73864b381f4f3980e26c2b6149</code>。旧镜像主扩展SHA256 <code>8edd76fe7cf488b526feaf64014e1ff0825393755312494b9e68a6b5cb9a4bbb</code>、bridge SHA256 <code>e16bfe22907b3e2e218db1b7cee139404b1076808de0b96301248de64119deb8</code> 只用于历史证据和回退备份；安装前的包和主扩展已备份在本次结果目录 <code>backup/</code>，见 <code>backup/manifest.json</code>。旧目录不删除，但当前启动不依赖bridge。研发ixinfer仍须先于系统库加载；错误绑定系统cuinfer曾导致缺符号或启动hang。</p>
+<h2 id="3-启动命令">3. 启动命令</h2>
+<p>进入现有容器：</p>
+<pre class="highlight"><code class="language-bash">docker exec -it ds_v4.1_perf bash</code></pre>
+<p>启动前用 <code>ixsmi</code> 确认16个设备空闲，重启只处理已确认属于本次服务的进程。当前正式主扩展服务已在8000端口通过验证并保留运行，本轮仅清理启动配置，未重启服务。以下命令保持 <code>dsv41_editable_native_20261021_104955/launch_command_vllm.sh</code> 的实际模型配置，省略当前INT8路径无效或已有默认值的环境设置；<code>max-num-seqs=128</code> 和 <code>max-num-batched-tokens=2048</code> 采用当前默认，不显式传入：</p>
+<pre class="highlight"><code class="language-bash">export IXFORMER_ROOT=/workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/runtime
+export IXINFER_LIB=/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/ixinfer
+export VLLM_ILUVATAR_ROOT=/workspace/vllm_iluvatar
+export PYTHONPATH="${IXFORMER_ROOT}:${IXFORMER_ROOT}/ixformer_runtime:${VLLM_ILUVATAR_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+export LD_LIBRARY_PATH="${IXINFER_LIB}:${IXFORMER_ROOT}/ixformer_runtime/ixformer:/usr/local/corex/lib64:/usr/local/openmpi/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+export VLLM_ILUVATAR_INDEXER_INT8=1
+export VLLM_ILUVATAR_IXFD_COMM=1
+export VLLM_ILUVATAR_DSPARK_SPLIT_SAMPLE=1
+export VLLM_ILUVATAR_DSV41_DISABLE_AUX_STREAM=1
+export VLLM_ILUVATAR_W4A8_FILTER_EP=1
+export NCCL_ALGO=allreduce:tree
+export TORCH_NCCL_BLOCKING_WAIT=1
+unset CUDA_LAUNCH_BLOCKING VLLM_PP_LAYER_PARTITION
+
+vllm serve /workspace/models/deepseek-ai/DeepSeek-V4.1-Flash-W4A8 \
+  --served-model-name DeepSeek-V4.1-Flash-W4A8 \
+  -tp 8 -pp 1 -dp 2 --enable-expert-parallel \
+  --tokenizer-mode deepseek_v41 \
+  --mm-encoder-tp-mode weights \
+  --limit-mm-per-prompt '{"image":5}' \
+  --tool-call-parser deepseek_v41 \
+  --enable-auto-tool-choice \
+  --reasoning-parser deepseek_v41 \
+  --no-enable-prefix-caching \
+  --max-model-len 262144 \
+  --max-cudagraph-capture-size 256 \
+  --gpu-memory-utilization 0.83 \
+  --engram-config '{"cpu_offload":true,"dp_shared_memory":true}' \
+  --speculative-config '{"method":"dspark","num_speculative_tokens":5,"draft_sample_method":"greedy"}' \
+  --port 8000</code></pre>
+<p>省略的4项及其依据如下，默认行为以当前安装的vLLM 0.30.0和本插件为准：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>省略项</th>
+<th>当前配置的行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VLLM_ILUVATAR_DSA_PERSISTENT_PAGES</code></td>
+<td>仅选择FP8 paged scorer实现；INT8评分提前返回，不经过该实现</td>
+</tr>
+<tr>
+<td><code>VLLM_USE_V2_MODEL_RUNNER</code></td>
+<td>未设置时自动选择；当前DSpark、多模态和TP8/PP1/DP2配置满足V2条件</td>
+</tr>
+<tr>
+<td><code>VLLM_ENGINE_READY_TIMEOUT_S</code></td>
+<td>插件在未设置时默认补为3600秒</td>
+</tr>
+<tr>
+<td><code>NCCL_PROTO</code></td>
+<td>当前MoE且DP&gt;1，插件在未设置时默认补为Simple</td>
+</tr>
+</tbody>
+</table></div>
+<p>若外部已经设置过V2 runner、启动超时或NCCL协议，相应覆盖仍会生效。复用旧shell时，可先执行 <code>unset VLLM_USE_V2_MODEL_RUNNER VLLM_ENGINE_READY_TIMEOUT_S NCCL_PROTO</code> 恢复默认选择。INT8、IXFD、DSpark split sampling、关闭aux stream、decode EP过滤、NCCL Tree及blocking wait保留；DSpark K5 greedy由 <code>--speculative-config</code> 设置。历史性能表中的环境字段和原始启动日志保留原样，不将本次精简标为重测。</p>
+<p>当前32GiB设备上的 <code>vllm serve</code> 默认batch token预算为2048；已开启chunked prefill，没有启用throughput模式，单图1024 tokens也不会触发多模态预算上调。该默认不能泛化到其他显存容量、运行模式或多模态配置。新权重脚本和本节命令均省略此参数，旧实验的显式2048及原始日志保留。</p>
+<p>也可使用仓库入口 <code>examples/deepseek_v41_flash/serve_w4a8_mixed_dp2.sh</code>，先设置同一组研发runtime/库环境，并显式设置 <code>DSV41_MULTIMODAL=1</code>。脚本默认开启INT8，保留显式 <code>VLLM_ILUVATAR_INDEXER_INT8=0</code> 的FP8兼容选项；默认仍为纯文本入口，启用多模态后使用本节的图片数、上下文及batch参数。</p>
+<h2 id="4-完整开发者模式编译安装与int8接口">4. 完整开发者模式编译安装与INT8接口</h2>
+<p><strong>正常编译当前仓库不会单独生成 <code>_indexer_int8_native.so</code>；它将 <code>paged_mqa_logits_int8</code> 接口直接编入主扩展 <code>vllm_iluvatar._C</code>，INT8 indexer继续保留。</strong> 本次已用当前源码、CoreX5.0及同一批研发SDK完成全插件开发者安装，构建退出码0、耗时580.1秒；<code>cpu_preflight.json</code> 确认editable路径为 <code>file:///workspace/vllm_iluvatar</code>，正常导入的是第2节的新主扩展，INT8接口可调用，临时bridge未加载，9个研发库哈希不变，IXFD的 <code>all_reduce</code> 和 <code>init_comm_with_store</code> 可用。随后新主扩展已通过起服和简单请求验证，结果见第4.3与第5节。</p>
+<ul>
+<li><code>CMakeLists.txt</code>（源码／外部材料：<code>../../../CMakeLists.txt</code>） 收集 <code>csrc</code> 下的C++/CUDA文件并构建 <code>_C</code>。</li>
+<li><code>csrc/pybind_kernel.cc</code>（源码／外部材料：<code>../../../csrc/pybind_kernel.cc</code>） 在 <code>ENABLE_CUINFER</code> 下绑定 <code>cuinfer.paged_mqa_logits_int8</code>。</li>
+<li><code>setup.py</code>（源码／外部材料：<code>../../../setup.py</code>） 在ivcore11默认启用cuinfer；本次显式设置 <code>VLLM_ILUVATAR_ENABLE_CUINFER=1</code>。</li>
+<li>旧bridge只补充镜像旧主扩展缺少的接口，其源码、构建命令和历史产物继续保留；切换后的runtime不再加载它。</li>
+</ul>
+<h3 id="41-开发者安装命令与原始记录">4.1 开发者安装命令与原始记录</h3>
+<p>在现有 <code>ds_v4.1_perf</code> 内执行，当前服务停止并确认资源释放后再安装。安装输出为源码目录主扩展，Python包以editable方式注册；没有重装依赖或修改研发SDK。编译进程临时清除INT8运行开关只是为了不执行服务runtime，服务启动必须按第3节重新设置为1。</p>
+<p>根CMake不会自动将 <code>IXINFER_LIB</code> 用作编译期include/link配置，本次通过 <code>sdk_paths.cmake</code> 显式传入已验收SDK头文件和库路径。头文件配置沿用原始 <code>sdk_paths.cmake</code>；以下安装命令在代码清理后删除了输出模式环境变量，其余参数与已执行成功的 <code>install_editable.sh</code> 一致。当前构建统一继承stdout/stderr。原始脚本和CMake记录保持原样，后续新构建使用新结果目录。</p>
+<pre class="highlight"><code class="language-bash">mkdir -p /workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955
+cat &gt; /workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/sdk_paths.cmake &lt;&lt;'CMAKE'
+include_directories(BEFORE "/workspace/app_perf_infer/sdk/ixinfer/include")
+link_directories(BEFORE "/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/ixinfer" "/usr/local/corex/lib64")
+CMAKE</code></pre>
+<pre class="highlight"><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+cd /workspace/vllm_iluvatar
+export CUDA_VISIBLE_DEVICES=
+export PYTHONPATH=/usr/local/lib/python3.12/site-packages
+export LD_LIBRARY_PATH=/workspace/vllm_iluvatar/logs/perf/v0.30.0/dsv41_functional_merge_20261020_142112/sdk_corex50/ixinfe[本地路径]
+export VLLM_ILUVATAR_CUDA_ARCHITECTURES=ivcore11
+export CMAKE_CUDA_ARCHITECTURES=ivcore11
+export TORCH_CUDA_ARCH_LIST=ivcore11
+export VLLM_ILUVATAR_ENABLE_CUINFER=1
+export VLLM_ILUVATAR_MAX_JOBS=8
+export CMAKE_BUILD_TYPE=Release
+export VLLM_ILUVATAR_CMAKE_BUILD_DIR=/workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/cmake
+export CMAKE_ARGS="-DCMAKE_PROJECT_INCLUDE=/workspace/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/sdk_paths.cmake -DCMAKE_CUDA_COMPILER=/usr/local/corex/bin/clang++ -DCMAKE_OBJCOPY=/usr/bin/objcopy"
+unset VLLM_ILUVATAR_ENABLE_STARTUP_PATCH VLLM_ILUVATAR_INDEXER_INT8 CUDA_LAUNCH_BLOCKING
+python3 -m pip install -e /workspace/vllm_iluvatar --no-deps --no-build-isolation -v</code></pre>
+<p>本次 <code>build_install.log</code> 只保留140行，停在Ninja17/101，应视为部分stdout/stderr，缺失部分没有补造。<code>cmake/.ninja_log</code> 独立记录全部101步及最终链接，<code>build_status.json</code> 记录退出0及耗时，CPU与实服记录确认新产物和editable安装成功；<code>preflight.json</code> 记录构建起点、工作区状态和旧服务信息，安装前备份位于 <code>backup/</code>。仓库其他未提交的分析文件未被清理。</p>
+<h3 id="42-不加载旧runtime或bridge的独立cpu检查">4.2 不加载旧runtime或bridge的独立CPU检查</h3>
+<p>本次正常editable导入检查已通过，详情在 <code>cpu_preflight.py</code>、<code>cpu_preflight.sh</code> 和 <code>cpu_preflight.json</code>。如需额外确认确切文件，可使用下面的 <code>-I -S</code> 检查，避免系统 <code>.pth</code> 或 <code>sitecustomize</code> 触发其他预载。它只导入主扩展，不执行GPU算子，也不代替实际请求验证。先设置第3节的 <code>LD_LIBRARY_PATH</code>，再执行：</p>
+<pre class="highlight"><code class="language-bash">CUDA_VISIBLE_DEVICES='' python3 -I -S - /workspace/vllm_iluvatar/vllm_iluvatar &lt;&lt;'PY'
+import hashlib
+import importlib.util
+import json
+import site
+import sys
+import sysconfig
+from pathlib import Path
+
+assert "sitecustomize" not in sys.modules
+assert "vllm_iluvatar" not in sys.modules
+# -S下import site不会执行site.main；不用会处理.pth的site.addsitedir。
+sys.path.extend(site.getsitepackages())
+import torch
+target = (Path(sys.argv[1]) / ("_C" + sysconfig.get_config_var("EXT_SUFFIX"))).resolve(strict=True)
+spec = importlib.util.spec_from_file_location("_C", target)
+module = importlib.util.module_from_spec(spec)
+sys.modules["_C"] = module
+spec.loader.exec_module(module)
+assert Path(module.__file__).resolve() == target
+assert callable(getattr(getattr(module, "cuinfer", None), "paged_mqa_logits_int8", None))
+assert "sitecustomize" not in sys.modules
+assert "vllm_iluvatar" not in sys.modules
+assert "_indexer_int8_native" not in sys.modules
+print(json.dumps({"native_file": str(target), "native_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                  "torch_version": torch.__version__, "int8_api": True, "temporary_bridge_loaded": False}, indent=2))
+PY</code></pre>
+<h3 id="43-新主扩展实服验收状态">4.3 新主扩展实服验收状态</h3>
+<p>第二次使用与原服务完全相同的模型参数起服成功，READY耗时555.86秒，launcher PID3973096，服务保留在8000。<code>retained_service_verified.json</code> 核实16个worker的真实INT8输入为 <code>torch.int8</code>，实际主扩展均为第2节的源码目录新 <code>_C.so</code>，未加载旧bridge；9个研发库路径/哈希不变，16个Engram共享inode各由两个DP worker映射，CUDA Graph、DSpark K5 greedy及原启动参数均保持。单图、双图、五图、文本reasoning、tool-call和六图超限拒绝共8/8通过，7次正常生成累计322实际输出tokens，另1次六图返回预期HTTP400；最终health200、队列为空。</p>
+<p>首次同参数启动在48/48权重分片加载后，主机可用内存降至23.51GiB，触发24GiB保护停止，未进入请求验收。控制进程同时记录到 <code>ixsmi pmon</code> 被SIGKILL；现有证据表明是watchdog终止所属后代，没有新增内核OOM证据，不能表述为已观察到物理OOM。安全清理后，第二次同参数重启成功，可用主存最低采样51.80GiB后回升。两次结果说明启动峰值仍需排查，没有据此认定pin memory或偶发hang根因已修复。首次日志保存在本次目录 <code>attempt1/</code>，保护记录为 <code>attempt1/memory_guard.json</code>，摘要为 <code>startup_attempts.json</code>，资源采样为 <code>resources.jsonl</code>。</p>
+<p>本次只验证完整开发者安装、正式主扩展及实际请求，不重跑完整性能矩阵或EvalScope；第5节历史精度和第6节历史性能继续保留其原产物口径。</p>
+<h2 id="5-当前进度历史验收与可核对证据">5. 当前进度、历史验收与可核对证据</h2>
+<p>本次完整开发者安装、CPU检查、正式主扩展重启和简单请求验证均通过。当前配置为INT8 indexer、TP8/PP1/DP2/EP16、DSpark K5 greedy、Graph、上下文262144、5图、batch2048，无显式 <code>--max-num-seqs</code>，实际默认128。新主扩展的实际请求证据如下；后续列出的全量文本精度仍来自历史“旧镜像主扩展＋bridge”，本次未重跑。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>本次检查</th>
+<th>实际结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单图A / B</td>
+<td>分别识别4827、红圆/蓝正方形；9153、绿三角形/橙长方形</td>
+</tr>
+<tr>
+<td>双图AB / BA</td>
+<td>两种顺序下数字与颜色形状均按图正确返回</td>
+</tr>
+<tr>
+<td>文本reasoning</td>
+<td>17×19返回323，reasoning字段存在</td>
+</tr>
+<tr>
+<td>tool-call</td>
+<td>返回 <code>get_weather</code>、city=北京的结构化调用，未执行外部工具</td>
+</tr>
+<tr>
+<td>5张1302×1302图片</td>
+<td>4827、9153、6308、2746、8062及各图颜色形状均正确；实际输入5004 tokens</td>
+</tr>
+<tr>
+<td>6张图片</td>
+<td>HTTP400，提示每请求最多5图，属于预期拒绝</td>
+</tr>
+<tr>
+<td>总计</td>
+<td>8/8通过；7次正常生成、1次预期拒绝；实际输出322 tokens，health200，队列为空</td>
+</tr>
+</tbody>
+</table></div>
+<p>以下为历史功能与精度记录：</p>
+<p>历史配置移除显式maxseq64后，默认128起服成功；单图、双图、五图、超限拒绝、reasoning和tool-call功能检查8/8。此前maxseq64阶段还验证过261260实际输入tokens的图文检索，不能将该长请求误写成在默认128阶段重测。</p>
+<p>历史文本精度使用旧主扩展＋bridge的INT8/DSpark/Graph服务，EvalScope1.12.0、并发16、三个数据集全量各一次。评测输出上限245760，预留上下文输入空间，所有回答均自然结束。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>数据集</th>
+<th>完成数</th>
+<th>官方score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPQA Diamond</td>
+<td>198/198</td>
+<td>89.39%</td>
+</tr>
+<tr>
+<td>C-Eval</td>
+<td>1346/1346</td>
+<td>95.17%</td>
+</tr>
+<tr>
+<td>MATH-500</td>
+<td>500/500</td>
+<td>98.00%</td>
+</tr>
+</tbody>
+</table></div>
+<p>合计2044/2044、3,938,796实际输出tokens；API错误、空答案和长度截断均为0。这是文本任务精度，视觉仅完成上述功能验证。INT8 indexer的9点纯文本性能与FP8对照见第6节，完整记录另见性能速查（源码／外部材料：<code>../../user/performance_cheatsheet.md#deepseek-v41-flash-w4a8-w4a8</code>）。</p>
+<p>2026-10-21 10:31只读复核确认原launcher PID3519071及16个worker身份一致，16个真实INT8调用记录有效，主扩展/bridge/9个SDK库哈希不变，health200。实际请求返回323，图片返回4827、红圆、蓝正方形。此记录属于完整安装前的历史复核；本次已按进程身份停止旧服务并保留清理证据，随后启动新正式主扩展。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>证据</th>
+<th>宿主机路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本次完整安装及CPU检查</td>
+<td><code>/mnt/share/user_homes/zyp/vllm_iluvatar/logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/</code> 内 build_install.log（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/build_install.log</code>）、build_status.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/build_status.json</code>）、cpu_preflight.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/cpu_preflight.json</code>）</td>
+</tr>
+<tr>
+<td>本次服务日志、完整启动命令</td>
+<td>同目录 server.log（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/server.log</code>）、launch_command_vllm.sh（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/launch_command_vllm.sh</code>）、retained_service.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/retained_service.json</code>）</td>
+</tr>
+<tr>
+<td>新主扩展、16worker真实INT8与SDK核查</td>
+<td>同目录 retained_service_verified.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/retained_service_verified.json</code>）、<code>indexer_execution/</code></td>
+</tr>
+<tr>
+<td>本次简单请求与实际响应</td>
+<td>同目录 request_checks.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/request_checks.json</code>）、additional_checks.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/additional_checks.json</code>），原始请求/响应在 <code>requests/</code>、<code>additional_requests/</code>，图片在 <code>test_images/</code>、<code>test_images_large/</code></td>
+</tr>
+<tr>
+<td>首次保护停止与第二次资源记录</td>
+<td>同目录 startup_attempts.json（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/startup_attempts.json</code>）、首次保护记录（源码／外部材料：<code>../../../logs/functional/v0.30.0/dsv41_editable_native_20261021_104955/attempt1/memory_guard.json</code>）、<code>attempt1/server.log</code>、<code>resources.jsonl</code>、<code>process_resources.jsonl</code>、<code>host_peak_details.jsonl</code></td>
+</tr>
+<tr>
+<td>历史服务日志、完整启动命令、功能报告</td>
+<td><code>/mnt/share/user_homes/zyp/vllm_iluvatar/logs/functional/v0.30.0/dsv41_multimodal_262k_defaultseq_20261020_210629/</code> 内的 <code>server.log</code>、<code>launch_command_vllm.sh</code>、<code>report.md</code></td>
+</tr>
+<tr>
+<td>历史INT8及请求复核</td>
+<td>上述历史目录 <code>service_rechecks/20261021_103104/audit.json</code>、<code>worker_int8_evidence.json</code> 和请求/响应JSON</td>
+</tr>
+<tr>
+<td>历史旧主扩展＋bridge的正式文本精度</td>
+<td><code>/mnt/share/user_homes/zyp/vllm_iluvatar/accuracy_results/DeepSeek-V4.1-Flash-W4A8-multimodal_20261020_210818/</code>，含配置、原始预测/判分/报告、日志、<code>prediction_audit.json</code></td>
+</tr>
+<tr>
+<td>适配、失败过程与并行限制</td>
+<td>合并验收记录（源码／外部材料：<code>../../adaptation_records/deepseek_v41_flash/vllm_0.30.0_dsv41_mixed_marlin_merge_20261020.md</code>）</td>
+</tr>
+<tr>
+<td>精度参数、历史参考与原始分数</td>
+<td>精度速查（源码／外部材料：<code>../../user/evaluation_cheatsheet.md#deepseek-v41-flash-w4a8</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<p>只读API检查可在服务所在宿主机执行：</p>
+<pre class="highlight"><code class="language-bash">curl --fail --silent --show-error http://localhost/health
+curl --fail --silent --show-error http://localhost/v1/models</code></pre>
+<p>确认INT8不能只看启动开关或 <code>/proc/&lt;pid&gt;/environ</code>。此前已复现setproctitle导致该环境采样缺项，实际执行证据要结合worker PID/启动时间、<code>torch.int8</code>输入记录和加载库路径。历史核查保存在上表对应目录；本次新runtime记录的首次真实INT8调用及16个worker身份已在 <code>retained_service_verified.json</code> 核对通过。</p>
+<h2 id="6-已测性能int8自身与fp8对照">6. 已测性能：INT8自身与FP8对照</h2>
+<p>以下为2026-10-20完成的历史纯文本测试，使用本指南第1节的SDK、新W4A8权重与 <strong>TP8 / PP1 / DP2 / EP16、DSpark K5 greedy、CUDA Graph</strong>。当时主扩展为镜像旧 <code>_C.so</code>，INT8接口由临时bridge补齐；图片上限显式为0。<strong>这些数据不代表当前五图多模态模式或本次开发者模式完整编译安装后的主扩展性能。</strong> 本次安装仅做重启和简单请求验证，不重跑性能矩阵或精度。</p>
+<h3 id="61-测试配置与统计口径">6.1 测试配置与统计口径</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>实测配置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>硬件 / 软件</td>
+<td>16×Iluvatar BI-V150；CoreX/Driver 5.0.0；Python 3.12.11；Torch 2.10.0；vLLM / 插件0.30.0</td>
+</tr>
+<tr>
+<td>权重 / 代码</td>
+<td><code>DeepSeek-V4.1-Flash-W4A8</code>；生产源码与 <code>8b8187b7</code> 一致；研发ixformer <code>08a47e1f</code>、ixinfer <code>aca6f354</code></td>
+</tr>
+<tr>
+<td>并行 / Indexer</td>
+<td>TP8 / PP1 / DP2 / EP16；<code>VLLM_ILUVATAR_INDEXER_INT8=1</code></td>
+</tr>
+<tr>
+<td>Graph / 上下文</td>
+<td>FULL_DECODE_ONLY，capture cap256；上下文262144；batch tokens2048；<code>gpu-memory-utilization=0.83</code></td>
+</tr>
+<tr>
+<td>Engram / 请求入口</td>
+<td>CPU offload、DP共享内存；关闭prefix cache；<code>--limit-mm-per-prompt '{"image":0}'</code>；纯文本 <code>/v1/completions</code></td>
+</tr>
+<tr>
+<td>DSpark / 通信</td>
+<td>K5 greedy；IXFD_COMM=1；NCCL allreduce:tree / Simple；<code>TORCH_NCCL_BLOCKING_WAIT=1</code></td>
+</tr>
+<tr>
+<td>请求参数</td>
+<td>random数据；每点输出2048 tokens；<code>--ignore-eos --temperature 0.0 --seed 1000</code>；正式请求数为并发×2</td>
+</tr>
+<tr>
+<td>轮数 / 完整性</td>
+<td>每点各一轮，共9/9点、76/76请求、155,648实际输出tokens；每个请求均完整输出2048 tokens；缺失、无效、失败均为0</td>
+</tr>
+</tbody>
+</table></div>
+<p>历史性能测试的其余固定开关为 <code>VLLM_ILUVATAR_DSPARK_SPLIT_SAMPLE=1</code>、<code>VLLM_ILUVATAR_DSV41_DISABLE_AUX_STREAM=1</code>、<code>VLLM_ILUVATAR_DSA_PERSISTENT_PAGES=1</code>、<code>VLLM_ILUVATAR_W4A8_FILTER_EP=1</code>、<code>VLLM_ILUVATAR_W4A8_FILTER_EP_PREFILL=0</code>。</p>
+<p>输出tok/s是16卡服务在每个完整测试点期间的平均输出吞吐，不是瞬时峰值。TTFT/TPOT列为逐请求均值与P99，E2E为逐请求端到端耗时均值；每点仅2–16个请求，P99只描述本轮样本。原4点与补测5点复用同一服务，未在中间重启。</p>
+<h3 id="62-int8-indexer自身完整性能9点">6.2 INT8 indexer自身完整性能（9点）</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>输入 / 输出 tokens</th>
+<th>并发</th>
+<th>成功/请求</th>
+<th>实际输出 tokens</th>
+<th>输出 tok/s</th>
+<th>TTFT 均值/P99（秒）</th>
+<th>TPOT 均值/P99（ms）</th>
+<th>平均E2E（秒）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8192/2048</td>
+<td>1</td>
+<td>2/2</td>
+<td>4,096</td>
+<td>79.71</td>
+<td>5.41 / 5.43</td>
+<td>9.91 / 10.02</td>
+<td>25.69</td>
+</tr>
+<tr>
+<td>8192/2048</td>
+<td>4</td>
+<td>8/8</td>
+<td>16,384</td>
+<td>158.22</td>
+<td>9.67 / 17.35</td>
+<td>18.09 / 27.78</td>
+<td>46.70</td>
+</tr>
+<tr>
+<td>8192/2048</td>
+<td>8</td>
+<td>16/16</td>
+<td>32,768</td>
+<td>204.78</td>
+<td>15.94 / 31.61</td>
+<td>26.39 / 34.65</td>
+<td>69.97</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>1</td>
+<td>2/2</td>
+<td>4,096</td>
+<td>64.29</td>
+<td>10.55 / 10.59</td>
+<td>10.41 / 10.44</td>
+<td>31.86</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>4</td>
+<td>8/8</td>
+<td>16,384</td>
+<td>129.98</td>
+<td>20.38 / 34.79</td>
+<td>20.43 / 35.07</td>
+<td>62.20</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>8</td>
+<td>16/16</td>
+<td>32,768</td>
+<td>145.11</td>
+<td>27.05 / 63.52</td>
+<td>38.26 / 84.07</td>
+<td>105.38</td>
+</tr>
+<tr>
+<td>32768/2048</td>
+<td>2</td>
+<td>4/4</td>
+<td>8,192</td>
+<td>64.30</td>
+<td>29.81 / 42.77</td>
+<td>16.45 / 21.53</td>
+<td>63.49</td>
+</tr>
+<tr>
+<td>32768/2048</td>
+<td>8</td>
+<td>16/16</td>
+<td>32,768</td>
+<td>90.71</td>
+<td>53.97 / 130.63</td>
+<td>60.41 / 109.60</td>
+<td>177.63</td>
+</tr>
+<tr>
+<td>60000/2048</td>
+<td>2</td>
+<td>4/4</td>
+<td>8,192</td>
+<td>38.76</td>
+<td>54.79 / 82.57</td>
+<td>24.66 / 32.60</td>
+<td>105.27</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="63-fp8--int8-indexer对比9个对应点">6.3 FP8 / INT8 indexer对比（9个对应点）</h3>
+<p>FP8/INT8指Indexer Q/K量化与scoring路径，两组模型均使用同一份新W4A8权重。FP8来自此前15个有效点中的对应9点，生产代码、研发SDK、并行、DSpark、Graph及请求参数保持一致；9点完整argv除结果路径外一致。箭头为FP8→INT8，TTFT/TPOT均为请求均值；每点各一轮，变化百分比仅描述本次观察值。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>输入 / 输出 tokens</th>
+<th>并发</th>
+<th>输出吞吐 tok/s（FP8→INT8）</th>
+<th>吞吐变化</th>
+<th>平均TTFT 秒（FP8→INT8）</th>
+<th>平均TPOT ms（FP8→INT8）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8192/2048</td>
+<td>1</td>
+<td>59.97 → 79.71</td>
+<td>+32.9%</td>
+<td>5.88 → 5.41</td>
+<td>13.81 → 9.91</td>
+</tr>
+<tr>
+<td>8192/2048</td>
+<td>4</td>
+<td>118.74 → 158.22</td>
+<td>+33.3%</td>
+<td>12.33 → 9.67</td>
+<td>27.55 → 18.09</td>
+</tr>
+<tr>
+<td>8192/2048</td>
+<td>8</td>
+<td>139.58 → 204.78</td>
+<td>+46.7%</td>
+<td>16.44 → 15.94</td>
+<td>48.47 → 26.39</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>1</td>
+<td>33.09 → 64.29</td>
+<td>+94.3%</td>
+<td>12.23 → 10.55</td>
+<td>24.26 → 10.41</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>4</td>
+<td>74.08 → 129.98</td>
+<td>+75.5%</td>
+<td>20.13 → 20.38</td>
+<td>43.32 → 20.43</td>
+</tr>
+<tr>
+<td>16384/2048</td>
+<td>8</td>
+<td>75.75 → 145.11</td>
+<td>+91.6%</td>
+<td>43.33 → 27.05</td>
+<td>82.17 → 38.26</td>
+</tr>
+<tr>
+<td>32768/2048</td>
+<td>2</td>
+<td>45.05 → 64.30</td>
+<td>+42.7%</td>
+<td>37.62 → 29.81</td>
+<td>25.87 → 16.45</td>
+</tr>
+<tr>
+<td>32768/2048</td>
+<td>8</td>
+<td>41.07 → 90.71</td>
+<td>+120.9%</td>
+<td>96.83 → 53.97</td>
+<td>145.54 → 60.41</td>
+</tr>
+<tr>
+<td>60000/2048</td>
+<td>2</td>
+<td>18.45 → 38.76</td>
+<td>+110.0%</td>
+<td>86.57 → 54.79</td>
+<td>66.04 → 24.66</td>
+</tr>
+</tbody>
+</table></div>
+<p>9个对应点的输出吞吐观察值提高32.9%–120.9%，平均TPOT均降低；16384输入、并发4的平均TTFT由20.13变为20.38秒，单轮看基本持平，不作统计显著性判断。DSpark接受行为也有变化，总体收益不能全部归因于单个Indexer kernel；这些数据也没有重新比较其他TP/PP/DP拓扑，不能据此推断未覆盖负载的收益。</p>
+<h3 id="64-原始命令日志与数据">6.4 原始命令、日志与数据</h3>
+<p>下表路径为宿主机相对仓库根目录 <code>/mnt/share/user_homes/zyp/vllm_iluvatar/</code> 的位置；容器根目录对应 <code>/workspace/vllm_iluvatar/</code>。原始目录保留，不覆盖已有记录。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>内容</th>
+<th>原始路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INT8完整9点独立表、FP8/INT8对照表</td>
+<td><code>logs/perf/v0.30.0/dsv41_int8_supplement_20261020_1848/combined_audited_measurements.csv</code>、<code>combined_comparison_to_fp8_baseline.csv</code></td>
+</tr>
+<tr>
+<td>请求/token完整性、逐点可比性、18份来源JSON哈希</td>
+<td>同目录 <code>combined_audit.json</code>、<code>combined_comparability.json</code>、<code>combined_source_manifest.json</code></td>
+</tr>
+<tr>
+<td>INT8原4点、原始启动命令和完整服务日志</td>
+<td><code>logs/perf/v0.30.0/dsv41_merged_sdk_indexer_int8_perf_after_20261020_152607/</code> 内 <code>serve.sh</code>、<code>launch_command.txt</code>、<code>server.log</code>、<code>round1/</code></td>
+</tr>
+<tr>
+<td>INT8补测5点、累计报告</td>
+<td><code>logs/perf/v0.30.0/dsv41_int8_supplement_20261020_1848/</code> 内 <code>runner.log</code>、<code>performance_report.md</code>、<code>round1/</code>；其 <code>server.log</code> 链接到上述同一服务日志</td>
+</tr>
+<tr>
+<td>FP8原始15个有效点（本节取对应9点）</td>
+<td><code>logs/perf/v0.30.0/dsv41_merged_sdk_perf_20261020_152607/</code> 内 <code>server.log</code>、<code>audit.json</code>、<code>round1/</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>各点详细结果位于 <code>round1/concurrency&lt;C&gt;_prompts&lt;2C&gt;_input&lt;I&gt;_output2048.json</code>；完整客户端命令与stdout/stderr分别为 <code>round1/logs/</code> 下的同名 <code>.argv.json</code> 和 <code>.log</code>。历史纯文本启动命令以原始 <code>launch_command.txt</code> 为准，当前多模态部署使用第3节命令。</p>
+<h2 id="7-已知限制">7. 已知限制</h2>
+<ul>
+<li>
+<p>清理后的 DeepSeek-V4.1 DSpark 仅支持 PP1；PP&gt;1 + DSpark 在配置阶段明确报错。通用元数据、Graph捕获输入和采样兼容修复已独立为 <code>patch_dspark.py</code>，普通不带DSpark的PP功能保留。历史PP2+DSpark结果仅代表当时版本。</p>
+</li>
+<li>
+<p><code>Failed to pin system memory</code> 及偶发启动hang的完整根因尚未确认；当前成功运行及精度完成不代表该问题已修复。</p>
+</li>
+<li>batch2048是当前已验收配置；之前改成4096明显减少可用KV。只把图片上限设为5，并不会自动把当时的4图encoder预热降为1图。</li>
+<li>TP16受模型 <code>o_groups=8</code> 切分限制；其他TP/PP/DP候选的实际资源限制见合并验收记录。这里提供已测试的推荐配置，不宣称对所有负载最优。</li>
+<li>当前部署仍依赖研发SDK和ixformer runtime链接，已不依赖临时bridge。完整开发者安装、CPU检查与正式主扩展实服冒烟均通过；本次没有重跑该新二进制的完整性能或精度，历史数据不替代这些测量。</li>
+</ul>
+<p>本次PP支持范围收缩及代码清理仅完成CPU验证，按要求没有重启当前服务。运行中的INT8、DSpark K5服务继续使用重启前已加载的代码与原始参数，不能把已有GPU验收重标为清理后GPU验收。历史性能与精度记录保留原产物口径。</p></div><div class="article-source">学习笔记 · 正文中的引用及原始来源链接予以保留</div><nav class="article-pagination" aria-label="上一篇和下一篇"><a href="/articles/dsv41-upstream/"><small>上一篇</small>上游 vLLM 实现（NVIDIA）</a><a href="/articles/dsv41-diagrams/"><small>下一篇</small>架构图集与算子映射</a></nav></article></div><aside class="article-outline"><nav aria-label="本文大纲"><div class="outline-title"><h2>本文大纲</h2><span class="reading-percent">0%</span></div><div class="reading-track"><span class="reading-progress-bar"></span></div><div class="outline-tree"><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#1-%E7%89%88%E6%9C%AC%E4%B8%8E%E4%BA%A7%E7%89%A9" data-heading="1-版本与产物">1. 版本与产物</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#2-%E5%BD%93%E5%89%8D%E9%83%A8%E7%BD%B2%E6%89%80%E9%9C%80%E7%9B%AE%E5%BD%95" data-heading="2-当前部署所需目录">2. 当前部署所需目录</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#3-%E5%90%AF%E5%8A%A8%E5%91%BD%E4%BB%A4" data-heading="3-启动命令">3. 启动命令</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-deployment/#4-%E5%AE%8C%E6%95%B4%E5%BC%80%E5%8F%91%E8%80%85%E6%A8%A1%E5%BC%8F%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85%E4%B8%8Eint8%E6%8E%A5%E5%8F%A3" data-heading="4-完整开发者模式编译安装与int8接口">4. 完整开发者模式编译安装与INT8接口</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-deployment/#41-%E5%BC%80%E5%8F%91%E8%80%85%E5%AE%89%E8%A3%85%E5%91%BD%E4%BB%A4%E4%B8%8E%E5%8E%9F%E5%A7%8B%E8%AE%B0%E5%BD%95" data-heading="41-开发者安装命令与原始记录">4.1 开发者安装命令与原始记录</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#42-%E4%B8%8D%E5%8A%A0%E8%BD%BD%E6%97%A7runtime%E6%88%96bridge%E7%9A%84%E7%8B%AC%E7%AB%8Bcpu%E6%A3%80%E6%9F%A5" data-heading="42-不加载旧runtime或bridge的独立cpu检查">4.2 不加载旧runtime或bridge的独立CPU检查</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#43-%E6%96%B0%E4%B8%BB%E6%89%A9%E5%B1%95%E5%AE%9E%E6%9C%8D%E9%AA%8C%E6%94%B6%E7%8A%B6%E6%80%81" data-heading="43-新主扩展实服验收状态">4.3 新主扩展实服验收状态</a></div></details><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#5-%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6%E5%8E%86%E5%8F%B2%E9%AA%8C%E6%94%B6%E4%B8%8E%E5%8F%AF%E6%A0%B8%E5%AF%B9%E8%AF%81%E6%8D%AE" data-heading="5-当前进度历史验收与可核对证据">5. 当前进度、历史验收与可核对证据</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-deployment/#6-%E5%B7%B2%E6%B5%8B%E6%80%A7%E8%83%BDint8%E8%87%AA%E8%BA%AB%E4%B8%8Efp8%E5%AF%B9%E7%85%A7" data-heading="6-已测性能int8自身与fp8对照">6. 已测性能：INT8自身与FP8对照</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-deployment/#61-%E6%B5%8B%E8%AF%95%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%BB%9F%E8%AE%A1%E5%8F%A3%E5%BE%84" data-heading="61-测试配置与统计口径">6.1 测试配置与统计口径</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#62-int8-indexer%E8%87%AA%E8%BA%AB%E5%AE%8C%E6%95%B4%E6%80%A7%E8%83%BD9%E7%82%B9" data-heading="62-int8-indexer自身完整性能9点">6.2 INT8 indexer自身完整性能（9点）</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#63-fp8--int8-indexer%E5%AF%B9%E6%AF%949%E4%B8%AA%E5%AF%B9%E5%BA%94%E7%82%B9" data-heading="63-fp8--int8-indexer对比9个对应点">6.3 FP8 / INT8 indexer对比（9个对应点）</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#64-%E5%8E%9F%E5%A7%8B%E5%91%BD%E4%BB%A4%E6%97%A5%E5%BF%97%E4%B8%8E%E6%95%B0%E6%8D%AE" data-heading="64-原始命令日志与数据">6.4 原始命令、日志与数据</a></div></details><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#7-%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6" data-heading="7-已知限制">7. 已知限制</a></div></div></nav></aside></div><dialog id="outline-dialog" class="outline-popup" aria-labelledby="outline-dialog-title"><div class="search-heading"><h2 id="outline-dialog-title">本文大纲</h2><button class="icon-button" id="close-outline" aria-label="关闭本文大纲">×</button></div><nav class="outline-tree" aria-label="手机本文大纲"><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#1-%E7%89%88%E6%9C%AC%E4%B8%8E%E4%BA%A7%E7%89%A9" data-heading="1-版本与产物">1. 版本与产物</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#2-%E5%BD%93%E5%89%8D%E9%83%A8%E7%BD%B2%E6%89%80%E9%9C%80%E7%9B%AE%E5%BD%95" data-heading="2-当前部署所需目录">2. 当前部署所需目录</a></div><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#3-%E5%90%AF%E5%8A%A8%E5%91%BD%E4%BB%A4" data-heading="3-启动命令">3. 启动命令</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-deployment/#4-%E5%AE%8C%E6%95%B4%E5%BC%80%E5%8F%91%E8%80%85%E6%A8%A1%E5%BC%8F%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85%E4%B8%8Eint8%E6%8E%A5%E5%8F%A3" data-heading="4-完整开发者模式编译安装与int8接口">4. 完整开发者模式编译安装与INT8接口</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-deployment/#41-%E5%BC%80%E5%8F%91%E8%80%85%E5%AE%89%E8%A3%85%E5%91%BD%E4%BB%A4%E4%B8%8E%E5%8E%9F%E5%A7%8B%E8%AE%B0%E5%BD%95" data-heading="41-开发者安装命令与原始记录">4.1 开发者安装命令与原始记录</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#42-%E4%B8%8D%E5%8A%A0%E8%BD%BD%E6%97%A7runtime%E6%88%96bridge%E7%9A%84%E7%8B%AC%E7%AB%8Bcpu%E6%A3%80%E6%9F%A5" data-heading="42-不加载旧runtime或bridge的独立cpu检查">4.2 不加载旧runtime或bridge的独立CPU检查</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#43-%E6%96%B0%E4%B8%BB%E6%89%A9%E5%B1%95%E5%AE%9E%E6%9C%8D%E9%AA%8C%E6%94%B6%E7%8A%B6%E6%80%81" data-heading="43-新主扩展实服验收状态">4.3 新主扩展实服验收状态</a></div></details><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#5-%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6%E5%8E%86%E5%8F%B2%E9%AA%8C%E6%94%B6%E4%B8%8E%E5%8F%AF%E6%A0%B8%E5%AF%B9%E8%AF%81%E6%8D%AE" data-heading="5-当前进度历史验收与可核对证据">5. 当前进度、历史验收与可核对证据</a></div><details class="outline-group"><summary><a class="toc-link level-2" href="/articles/dsv41-deployment/#6-%E5%B7%B2%E6%B5%8B%E6%80%A7%E8%83%BDint8%E8%87%AA%E8%BA%AB%E4%B8%8Efp8%E5%AF%B9%E7%85%A7" data-heading="6-已测性能int8自身与fp8对照">6. 已测性能：INT8自身与FP8对照</a></summary><div class="outline-children"><a class="toc-link level-3" href="/articles/dsv41-deployment/#61-%E6%B5%8B%E8%AF%95%E9%85%8D%E7%BD%AE%E4%B8%8E%E7%BB%9F%E8%AE%A1%E5%8F%A3%E5%BE%84" data-heading="61-测试配置与统计口径">6.1 测试配置与统计口径</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#62-int8-indexer%E8%87%AA%E8%BA%AB%E5%AE%8C%E6%95%B4%E6%80%A7%E8%83%BD9%E7%82%B9" data-heading="62-int8-indexer自身完整性能9点">6.2 INT8 indexer自身完整性能（9点）</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#63-fp8--int8-indexer%E5%AF%B9%E6%AF%949%E4%B8%AA%E5%AF%B9%E5%BA%94%E7%82%B9" data-heading="63-fp8--int8-indexer对比9个对应点">6.3 FP8 / INT8 indexer对比（9个对应点）</a><a class="toc-link level-3" href="/articles/dsv41-deployment/#64-%E5%8E%9F%E5%A7%8B%E5%91%BD%E4%BB%A4%E6%97%A5%E5%BF%97%E4%B8%8E%E6%95%B0%E6%8D%AE" data-heading="64-原始命令日志与数据">6.4 原始命令、日志与数据</a></div></details><div class="outline-single"><a class="toc-link level-2" href="/articles/dsv41-deployment/#7-%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6" data-heading="7-已知限制">7. 已知限制</a></div></nav></dialog></main>
+  <footer class="site-footer"><span>© 2026 DarrenZhang · 博观而约取，厚积而薄发。</span><div><a href="/bookmarks/" hidden>阅读收藏</a><a href="/">返回主页</a></div></footer>
+  <dialog id="search-dialog" aria-labelledby="search-title"><div class="search-heading"><h2 id="search-title">搜索全部知识库</h2><button class="icon-button" id="close-search" aria-label="关闭搜索">×</button></div><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" maxlength="200" placeholder="搜索标题、关键词或正文…" autocomplete="off"></label><p id="search-summary" class="search-hint" role="status" aria-live="polite">搜索标题、章节与正文</p><div id="search-results" role="listbox" aria-label="搜索结果"></div><div class="search-footer"><span>↑ ↓ 选择 · Enter 阅读</span><span>Esc 关闭</span></div></dialog>
+  <dialog id="image-preview" class="image-preview" aria-labelledby="image-title"><header class="image-preview-header"><h2 id="image-title">架构图预览</h2><div class="image-controls"><button id="image-zoom-out" aria-label="缩小图片">−</button><span id="image-scale" aria-live="polite">100%</span><button id="image-zoom-in" aria-label="放大图片">＋</button><button id="image-fit">适应窗口</button><a id="image-original" target="_blank" rel="noopener">打开原图 ↗</a><button id="image-close" aria-label="关闭图片预览">×</button></div></header><div id="image-stage" class="image-stage"><img id="image-large" alt="" draggable="false"></div><footer class="image-preview-footer">滚轮缩放 · 拖动平移 · Esc 关闭 <span>＋ / − 缩放，0 适应窗口</span></footer></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+
