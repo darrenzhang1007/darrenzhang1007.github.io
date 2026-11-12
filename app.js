@@ -1,5 +1,5 @@
 import {enhanceMarkdown} from './markdown-extensions.js?v=d02358e68647';
-import {createViews,esc,icon} from './views.js?v=8689d94b9411';
+import {createViews,esc,icon} from './views.js?v=d9df3332e59c';
 import {noteUrl,readRoute,legacyTarget,readingParameters} from './routes.js?v=852893e14fa0';
 import {setupCopyPolicy} from './copy-policy.js?v=653f7f00b5dd';
 import {enhanceCodeBlocks} from './code-blocks.js?v=8a0f149633ed';
@@ -24,7 +24,7 @@ function render(){if((location.pathname==='/'||location.pathname==='/index.html'
   document.body.classList.remove('directory-open');document.body.classList.toggle('reader-view',isReader);main.innerHTML=html;document.title=`${title} · DarrenZhang`;document.querySelectorAll('[data-nav]').forEach(a=>{const active=a.dataset.nav===(page==='home'?'home':'articles');a.classList.toggle('active',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   main.querySelector('.book-grid')?.classList.toggle('single-book-grid',books.length===1);const bookmarksLink=document.querySelector('.site-footer a[href="/bookmarks/"]');if(bookmarksLink)bookmarksLink.hidden=!content.bookmarks.length;
   main.querySelectorAll('[data-book-search]').forEach(b=>b.addEventListener('click',()=>openSearch(b.dataset.bookSearch)));
-  document.querySelector('#toggle-directory')?.addEventListener('click',()=>toggleSidebar(!document.querySelector('#book-sidebar').classList.contains('open')));document.querySelector('#sidebar-mask')?.addEventListener('click',()=>toggleSidebar(false));document.querySelector('#copy-link')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);toast('文章链接已复制');}catch{toast('请从地址栏复制文章链接');}});window.scrollTo({top:0,behavior:'instant'});
+  document.querySelector('#toggle-directory')?.addEventListener('click',()=>toggleSidebar(!document.querySelector('#book-sidebar').classList.contains('open')));document.querySelector('#sidebar-mask')?.addEventListener('click',()=>toggleSidebar(false));window.scrollTo({top:0,behavior:'instant'});
   const prose=main.querySelector('.prose');if(prose)annotateSearchBlocks(prose);if(prose&&window.renderMathInElement)window.renderMathInElement(prose,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false,strict:'ignore',trust:false});
   if(prose)cleanupMarkdown=enhanceMarkdown(prose);
   if(prose)cleanupCode=enhanceCodeBlocks(prose,{notify:toast});
